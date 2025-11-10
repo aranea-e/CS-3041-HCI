@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realms Spellbook</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 1.5rem;
+            background-color: #fff;
+            color: #222;
+        }
+
+        #circles {
+            max-width: 640px;
+        }
+
+        .circle-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .circle-btn {
+            padding: 0.45rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            background: #fbfbfb;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        h2 {
+            margin: 0.4rem 0;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .notice {
+            color: #666;
+            font-size: 0.95rem;
+        }
+        #top-controls {
+            display: flex;
+            flex-direction: column; /* stack search above No Spell */
+            gap: 0.5rem;
+            align-items: stretch;
+            margin-bottom: 0.75rem;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 0.95rem;
+            box-sizing: border-box;
+        }
+
+        /* Make No Spell button align to the left under the search bar */
+        #top-controls .circle-btn {
+            width: auto;
+            align-self: flex-start;
+        }
+    </style>
+</head>
+<body>
+    <div id="top-controls">
+        <input id="search-input" type="search" placeholder="Search spells..." aria-label="Search spells" />
+        <button id="no-spell-btn" class="circle-btn">No Spell</button>
+    </div>
+    <div id="circles"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('circles');
+
+            // 1) Try to read position from URL query string: ?pos=...
+            const params = new URLSearchParams(window.location.search);
+            let selectedPosition = params.get('pos');
+
+            // 2) Fallback to localStorage if URL param missing
+            if (!selectedPosition) {
+                try {
+                    selectedPosition = localStorage.getItem('selectedPosition');
+                } catch (e) {
+                    selectedPosition = null;
+                }
+            }
+
+            const noSpellBtn = document.getElementById('no-spell-btn');
+
+            if (!selectedPosition) {
+                // hide the No Spell button when no position is available
+                if (noSpellBtn) noSpellBtn.style.display = 'none';
+                const p = document.createElement('p');
+                p.className = 'notice';
+                p.textContent = 'No position selected';
+                container.appendChild(p);
+                return;
+            }
+
+            // Expect format like "3-2". Extract the first number (circle index)
+            const firstPart = selectedPosition.split('-')[0];
+            const start = parseInt(firstPart, 10);
+
+            if (Number.isNaN(start) || start <= 0) {
+                const p = document.createElement('p');
+                p.className = 'notice';
+                p.textContent = 'Invalid position value';
+                container.appendChild(p);
+                return;
+            }
+
+            // Helper to get English ordinal suffix (1st, 2nd, 3rd, 4th...)
+            function ordinalSuffix(n) {
+                const rem100 = n % 100;
+                if (rem100 >= 11 && rem100 <= 13) return 'th';
+                const rem10 = n % 10;
+                if (rem10 === 1) return 'st';
+                if (rem10 === 2) return 'nd';
+                if (rem10 === 3) return 'rd';
+                return 'th';
+            }
+
+            // Create headers from start down to 1 with ordinal suffixes
+            // Map of circle number -> button labels
+            const circleLabels = {
+                1: [
+                    'Cure Disease', 'Detect Magic', 'Disrupt Light', "Fighter’s Intuition",
+                    'Gentle Repose', 'Ghost Blade', 'Heartiness', 'Identify', 'Immunity to Poison',
+                    'Implement', 'Light', 'Mentor', 'Pas', 'Protect Item', 'Protection from Boulder',
+                    'Repair Armor', 'Speak', 'Speak with Dead', 'Strange Brew', 'Transmute Weapon', 'Zombie Walk'
+                ],
+                2: [
+                    'Aura of Protection', 'Death Watch', 'Deep Pockets', 'Disenchant', 'Dream',
+                    'Enchant Weapon', 'Group Healing', 'Guidance', 'Heal Limb', 'Protect the Soul',
+                    'Protection from Missile', 'Reanimate Limb', 'Repair Item', 'Ward: Undead'
+                ],
+                3: [
+                    'Animate Lesser Undead', 'Beckon Corpse', 'Cantrip', 'Commune with Spirit', 'Disease Weapon',
+                    'Enfeeble Being', 'Feign Death', 'Foretell', 'Fortune Tell', 'Merge', 'Precognition', 'Purity',
+                    'Raise Dead', 'Skew Divination', 'Soul Bane'
+                ],
+                4: [
+                    'Animal Companion', 'Animate Undead', 'Armored Cloak', 'Call the Soul', 'Circle of Protection',
+                    'Combat Raise Dead', 'Create Poison', 'Death Wish', 'Disrupt', 'Divine Aid', 'Enchant Armor',
+                    'Find the Path', 'Magic Missile', 'Mystic Forge', 'Séance', 'Shapeshifting'
+                ],
+                5: [
+                    'Animate Undead General', 'Armor-Piercing Weapon', 'Circle of Healing', 'Familiar', 'Reforge',
+                    'Regenerate the Soul', 'Regeneration', 'Resist Magic', 'Vision', 'Ward: Enchanted Beings'
+                ],
+                6: [
+                    'Assassin’s Blade', 'Cry of Life', 'Embrace Death', 'Intervention', 'Lightning Bolt',
+                    'Masterwork Hammer', 'Prophecy', 'Resist Death', 'Ritual of Banishment', 'Second Chance',
+                    'Seed of Life', 'Transformation'
+                ]
+            };
+
+            for (let i = start; i >= 1; i--) {
+                const h = document.createElement('h2');
+                const suffix = ordinalSuffix(i);
+                h.textContent = `${i}${suffix} circle`;
+                container.appendChild(h);
+
+                const labels = circleLabels[i];
+                if (labels && labels.length) {
+                    const btnContainer = document.createElement('div');
+                    btnContainer.className = 'circle-buttons';
+
+                    labels.forEach(label => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'circle-btn';
+                        btn.textContent = label;
+                        btnContainer.appendChild(btn);
+                    });
+
+                    container.appendChild(btnContainer);
+                }
+            }
+
+            // Search/filter: filter displayed .circle-btn elements inside the container
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                const applyFilter = () => {
+                    const q = (searchInput.value || '').trim().toLowerCase();
+                    const optionButtons = container.querySelectorAll('.circle-btn');
+                    optionButtons.forEach(b => {
+                        // only filter buttons inside the circles container; No Spell is outside
+                        const text = (b.textContent || '').toLowerCase();
+                        if (!q || text.includes(q)) {
+                            b.style.display = '';
+                        } else {
+                            b.style.display = 'none';
+                        }
+                    });
+                };
+
+                searchInput.addEventListener('input', applyFilter);
+                // initial pass
+                applyFilter();
+            }
+
+            // When a circle button is clicked, navigate back to index and pass the selection
+            container.addEventListener('click', (ev) => {
+                const btn = ev.target.closest('.circle-btn');
+                if (!btn) return;
+
+                const label = btn.textContent || btn.innerText;
+                // selectedPosition is captured from above (string like '3-2')
+                const pos = selectedPosition;
+                if (!pos) return;
+
+                try {
+                    // Persist into a shared 'spells' map in localStorage
+                    const raw = localStorage.getItem('spells');
+                    const map = raw ? JSON.parse(raw) : {};
+                    map[pos] = label;
+                    localStorage.setItem('spells', JSON.stringify(map));
+                    // Also store selectedPosition for convenience
+                    localStorage.setItem('selectedPosition', pos);
+                } catch (e) {
+                    // ignore
+                }
+
+                const goto = `../index.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                window.location.href = goto;
+            });
+
+            // Wire up the No Spell button to clear the selected slot and return to index
+            if (noSpellBtn) {
+                noSpellBtn.addEventListener('click', () => {
+                    const pos = selectedPosition;
+                    if (!pos) return;
+
+                    try {
+                        const raw = localStorage.getItem('spells');
+                        const map = raw ? JSON.parse(raw) : {};
+                        if (map.hasOwnProperty(pos)) {
+                            delete map[pos];
+                            localStorage.setItem('spells', JSON.stringify(map));
+                        }
+                        // also clear selectedPosition
+                        localStorage.removeItem('selectedPosition');
+                    } catch (e) {
+                        // ignore
+                    }
+
+                    // Return to index; instruct index to clear this specific position
+                    window.location.href = `../index.html?clearedPos=${encodeURIComponent(pos)}`;
+                });
+            }
+        });
+    </script>
+</body>
+</html>

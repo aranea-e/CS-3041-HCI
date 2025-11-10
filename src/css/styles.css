@@ -1,0 +1,145 @@
+body {
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    background-color: #f0f0f0;
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+}
+
+.spell-grid {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(133px, 1fr));
+    grid-template-rows: repeat(8, 1fr);
+    gap: 0.95rem;
+    padding: 1.66rem;
+    background-color: #fff;
+    border-radius: 9px;
+    box-shadow: 0 0 14px rgba(0,0,0,0.1);
+    max-width: 798px;
+    width: 90%;
+    height: fit-content;
+}
+
+.spell-slot, .middle-extra {
+    padding: 1.66rem 1.33rem;
+    border: 2px solid #ccc;
+    border-radius: 6px;
+    background-color: white;
+    cursor: pointer;
+    font-style: italic;
+    color: #888;
+    transition: all 0.3s ease;
+    font-size: 0.90em;
+    min-height: 1.5em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Selected slots should be bold and black (not italic) */
+.spell-slot.selected {
+    font-style: normal;
+    color: #111;
+    font-weight: 700;
+}
+
+.spell-slot:hover, .middle-extra:hover {
+    background-color: #f8f8f8;
+    border-color: #666;
+    transform: translateY(-1.4px);
+}
+
+.middle-extra {
+    grid-column: 2;
+    grid-row: 6;
+    visibility: visible;
+}
+
+/* Position the Clear button at row 7, column 3 so it sits in the bottom-right of the grid */
+.spell-grid .clear-btn {
+    grid-column: 3;
+    grid-row: 7;
+}
+
+/* Options box spans 6-1,6-2,7-1,7-2 (two columns x two rows) */
+.options-box {
+    grid-column: 1 / 3; /* columns 1-2 */
+    grid-row: 7 / 9;    /* rows 7-8 */
+    resize: none;
+    padding: 1rem;
+    border: 2px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: #fff;
+    color: #222;
+    min-height: 5.5rem;
+    box-sizing: border-box;
+    /* place above underlying buttons */
+    z-index: 2;
+}
+
+/* Make sure the options box is visually cohesive with the grid */
+.spell-grid .options-box:focus {
+    outline: none;
+    border-color: #666;
+    box-shadow: 0 0 6px rgba(0,0,0,0.08);
+}
+
+/* Italicize placeholder text for the options box */
+.options-box::placeholder {
+    color: #888;
+}
+
+/* When the options box is empty show placeholder centered and italic to match buttons */
+.options-box:placeholder-shown {
+    text-align: center;
+    font-style: italic;
+    color: #888;
+}
+
+/* When the user has entered text, use normal left-aligned styling */
+.options-box:not(:placeholder-shown) {
+    text-align: left;
+    font-style: normal;
+    color: #222;
+}
+
+@media (max-width: 1024px) {
+    .spell-grid {
+        gap: 0.67rem;
+        padding: 1.33rem;
+        margin-top: 1.5rem;
+    }
+    
+    .spell-slot, .middle-extra {
+        padding: 1.33rem 0.95rem;
+        font-size: 0.85em;
+    }
+}
+
+@media (max-width: 768px) {
+    .spell-grid {
+        gap: 0.48rem;
+        padding: 0.95rem;
+        width: 95%;
+        margin-top: 1rem;
+    }
+    
+    .spell-slot, .middle-extra {
+        padding: 0.95rem 0.67rem;
+        font-size: 0.76em;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 768px) {
+    .spell-grid {
+        padding: 0.95rem;
+    }
+    
+    .spell-slot, .middle-extra {
+        padding: 0.67rem;
+    }
+}

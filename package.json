@@ -1,0 +1,16 @@
+{
+  "name": "spellbook-larp",
+  "version": "1.0.0",
+  "description": "A spellbook organizer for Live-Action Role-Playing Game.",
+  "main": "src/js/main.js",
+  "scripts": {
+    "start": "live-server src"
+  },
+  "keywords": [
+    "LARP",
+    "spellbook",
+    "organizer"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}
