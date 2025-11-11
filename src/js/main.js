@@ -79,6 +79,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             // ignore
         }
+        // Update Alchemy points label based on stored spells
+        try {
+            const alchemyEl = document.getElementById('alchemy-points');
+            if (alchemyEl) {
+                const computeAlchemySum = (m) => {
+                    let sum = 0;
+                    Object.values(m || {}).forEach(lbl => {
+                        if (!lbl) return;
+                        const match = String(lbl).match(/Alchemy\s*\((\d+)\)/i);
+                        if (match) sum += Number(match[1]);
+                    });
+                    return sum;
+                };
+
+                const sum = computeAlchemySum(map);
+                alchemyEl.textContent = `Alchemy Points: ${sum}`;
+                if (sum > 0) alchemyEl.classList.add('selected'); else alchemyEl.classList.remove('selected');
+            }
+        } catch (e) {
+            // ignore
+        }
     } catch (e) {
         // ignore
     }
@@ -133,8 +154,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Reset all spell-slot texts to default
             document.querySelectorAll('.spell-slot').forEach(slot => {
-                // keep the clear button label as 'Clear'
+                // keep the clear button label as 'Clear' and skip the alchemy label
                 if (slot.classList.contains('clear-btn')) return;
+                if (slot.classList.contains('alchemy-label')) return;
                 slot.textContent = 'Select Spell';
                 slot.classList.remove('selected');
             });
@@ -144,6 +166,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.removeItem('spellOptions');
                 const ta = document.getElementById('spell-options');
                 if (ta) ta.value = '';
+            } catch (e) {
+                // ignore
+            }
+
+            // Reset the alchemy points label to 0 and remove its selected styling
+            try {
+                const alchemyEl = document.getElementById('alchemy-points');
+                if (alchemyEl) {
+                    alchemyEl.textContent = 'Alchemy Points: 0';
+                    alchemyEl.classList.remove('selected');
+                }
             } catch (e) {
                 // ignore
             }

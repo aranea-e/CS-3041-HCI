@@ -70,6 +70,10 @@
     <div id="top-controls">
         <input id="search-input" type="search" placeholder="Search spells..." aria-label="Search spells" />
         <button id="no-spell-btn" class="circle-btn">No Spell</button>
+        <div id="special-buttons" style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+            <button id="regional-btn" class="circle-btn">Regional</button>
+            <button id="alchemy-btn" class="circle-btn">Alchemy</button>
+        </div>
     </div>
     <div id="circles"></div>
     <script>
@@ -90,10 +94,14 @@
             }
 
             const noSpellBtn = document.getElementById('no-spell-btn');
+            const regionalBtn = document.getElementById('regional-btn');
+            const alchemyBtn = document.getElementById('alchemy-btn');
 
             if (!selectedPosition) {
                 // hide the No Spell button when no position is available
                 if (noSpellBtn) noSpellBtn.style.display = 'none';
+                if (regionalBtn) regionalBtn.style.display = 'none';
+                if (alchemyBtn) alchemyBtn.style.display = 'none';
                 const p = document.createElement('p');
                 p.className = 'notice';
                 p.textContent = 'No position selected';
@@ -182,21 +190,39 @@
                 }
             }
 
+            // Update Alchemy label based on selected circle (display a number in parens)
+            // Mapping: circle 1->1, 2->2, 3->4, 4->6, 5->8, 6->12
+            try {
+                const alchemyMap = {1:1,2:2,3:4,4:6,5:8,6:12};
+                if (alchemyBtn) {
+                    const val = alchemyMap[start] || '';
+                    alchemyBtn.textContent = val ? `Alchemy (${val})` : 'Alchemy';
+                }
+            } catch (e) {
+                // ignore
+            }
+
             // Search/filter: filter displayed .circle-btn elements inside the container
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
                 const applyFilter = () => {
                     const q = (searchInput.value || '').trim().toLowerCase();
                     const optionButtons = container.querySelectorAll('.circle-btn');
-                    optionButtons.forEach(b => {
-                        // only filter buttons inside the circles container; No Spell is outside
+                    // Also include the special buttons (Regional/Alchemy) which live
+                    // outside the circles container so they can be filtered too.
+                    const specialButtons = document.querySelectorAll('#special-buttons .circle-btn');
+
+                    function filterButton(b) {
                         const text = (b.textContent || '').toLowerCase();
                         if (!q || text.includes(q)) {
                             b.style.display = '';
                         } else {
                             b.style.display = 'none';
                         }
-                    });
+                    }
+
+                    optionButtons.forEach(filterButton);
+                    specialButtons.forEach(filterButton);
                 };
 
                 searchInput.addEventListener('input', applyFilter);
@@ -253,6 +279,38 @@
                     window.location.href = `../index.html?clearedPos=${encodeURIComponent(pos)}`;
                 });
             }
+
+            // Wire up the Regional and Alchemy buttons so they behave like spell options.
+            // Save the button's displayed text (this ensures Alchemy's "(n)" suffix
+            // is preserved when the selection is stored and the index page is shown).
+            function makeSpecialBtnHandler(btn) {
+                if (!btn) return;
+                btn.addEventListener('click', () => {
+                    const pos = selectedPosition;
+                    if (!pos) return;
+
+                    // Use the button's visible label so dynamic labels (e.g. "Alchemy (8)")
+                    // are persisted exactly as shown.
+                    const label = (btn.textContent || btn.innerText || '').trim();
+
+                    try {
+                        // Persist into the shared 'spells' map and store selectedPosition
+                        const raw = localStorage.getItem('spells');
+                        const map = raw ? JSON.parse(raw) : {};
+                        map[pos] = label;
+                        localStorage.setItem('spells', JSON.stringify(map));
+                        localStorage.setItem('selectedPosition', pos);
+                    } catch (e) {
+                        // ignore
+                    }
+
+                    const goto = `../index.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                    window.location.href = goto;
+                });
+            }
+
+            makeSpecialBtnHandler(regionalBtn);
+            makeSpecialBtnHandler(alchemyBtn);
         });
     </script>
 </body>

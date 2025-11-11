@@ -60,11 +60,21 @@ body {
 /* Position the Clear button at row 7, column 3 so it sits in the bottom-right of the grid */
 .spell-grid .clear-btn {
     grid-column: 3;
-    grid-row: 7;
+    grid-row: 8;
     /* Use the same visual styling as a selected spell slot */
     font-style: normal;
     color: #111;
     font-weight: 700;
+}
+
+/* Alchemy points label sits at row 7, column 3. It should look like a slot
+   but not be interactable and must be skipped by the Clear handler. */
+.alchemy-label {
+    grid-column: 3;
+    grid-row: 7;
+    /* make it non-interactive */
+    pointer-events: none;
+    cursor: default;
 }
 
 /* Options box spans 6-1,6-2,7-1,7-2 (two columns x two rows) */
