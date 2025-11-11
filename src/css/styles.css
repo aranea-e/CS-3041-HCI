@@ -61,6 +61,10 @@ body {
 .spell-grid .clear-btn {
     grid-column: 3;
     grid-row: 7;
+    /* Use the same visual styling as a selected spell slot */
+    font-style: normal;
+    color: #111;
+    font-weight: 700;
 }
 
 /* Options box spans 6-1,6-2,7-1,7-2 (two columns x two rows) */
@@ -142,4 +146,13 @@ body {
     .spell-slot, .middle-extra {
         padding: 0.67rem;
     }
+}
+
+/* Utility class to temporarily disable transitions while JS updates many elements.
+   This prevents a visual lag where text updates immediately but transitionable
+   properties (color, transform, border-color) animate shortly after. */
+.no-transition .spell-slot,
+.no-transition .middle-extra,
+.no-transition .options-box {
+    transition: none !important;
 }

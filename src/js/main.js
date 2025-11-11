@@ -117,6 +117,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ignore
             }
 
+            // To avoid a flash where the button text changes immediately but
+            // transitionable styles (color/transform) animate a moment later,
+            // temporarily disable transitions, perform the updates, force a
+            // reflow/paint, then re-enable transitions. This makes text and
+            // styling update simultaneously.
+            try {
+                // add helper class to suspend transitions
+                if (spellGrid && !spellGrid.classList.contains('no-transition')) {
+                    spellGrid.classList.add('no-transition');
+                }
+            } catch (e) {
+                // ignore
+            }
+
             // Reset all spell-slot texts to default
             document.querySelectorAll('.spell-slot').forEach(slot => {
                 // keep the clear button label as 'Clear'
@@ -133,6 +147,21 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (e) {
                 // ignore
             }
+
+            // Force a reflow then remove the no-transition helper so future
+            // interactions still have the expected animation behavior.
+            // Using requestAnimationFrame ensures the browser paints the
+            // intermediate state before re-enabling transitions.
+            void document.body.offsetHeight; // force reflow
+            requestAnimationFrame(() => {
+                try {
+                    if (spellGrid && spellGrid.classList.contains('no-transition')) {
+                        spellGrid.classList.remove('no-transition');
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            });
 
             return;
         }

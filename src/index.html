@@ -5,8 +5,60 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Realms Spellbook</title>
     <link rel="stylesheet" href="css/styles.css">
+    <style>
+        /* Prevent flash of wrong styling until JS applies selection */
+        .js-initial-hide { visibility: hidden; }
+        /* Ensure your selected/non-selected styles still apply */
+        /* Example: */
+        .spell { /* ...existing styles... */ }
+        .spell.selected { /* ...selected styles... */ }
+    </style>
+
+    <script>
+        // Run as early as possible. This script will wait for DOMContentLoaded,
+        // apply the "selected" class to matching spell elements based on
+        // saved selection (localStorage 'selectedSpells' expected to be JSON array),
+        // then reveal the page by removing the hide class.
+        (function() {
+            var storageKey = 'selectedSpells';
+            function applySelection() {
+                try {
+                    var raw = localStorage.getItem(storageKey);
+                    if (!raw) return;
+                    var selected = JSON.parse(raw);
+                    if (!Array.isArray(selected)) return;
+                    // Convert to a Set for faster lookup
+                    var selSet = {};
+                    for (var i = 0; i < selected.length; i++) selSet[String(selected[i])] = true;
+                    // Find elements with data-spell-id and add the 'selected' class
+                    var nodes = document.querySelectorAll('[data-spell-id]');
+                    for (var j = 0; j < nodes.length; j++) {
+                        var el = nodes[j];
+                        var id = el.getAttribute('data-spell-id');
+                        if (id && selSet[id]) el.classList.add('selected');
+                        else el.classList.remove('selected');
+                    }
+                } catch (e) {
+                    // If anything goes wrong, don't block showing the page
+                    console.error('applySelection error', e);
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    applySelection();
+                    document.body.classList.remove('js-initial-hide');
+                }, { once: true });
+            } else {
+                // DOM already ready
+                applySelection();
+                document.body.classList.remove('js-initial-hide');
+            }
+        })();
+    </script>
 </head>
-<body>
+
+<body class="js-initial-hide">
     <div class="spell-grid">
         <button class="spell-slot" data-position="1-1">Select Spell</button>
         <button class="spell-slot" data-position="1-2">Select Spell</button>
