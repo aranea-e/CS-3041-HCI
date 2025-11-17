@@ -4,12 +4,100 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Realms Spellbook</title>
+    <link rel="stylesheet" href="../css/styles.css">
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 1.5rem;
             background-color: #fff;
             color: #222;
+        }
+
+        /* Two-column layout for selection page: left = 33%, right = 67%.
+           Use fixed percentages so columns keep consistent horizontal spacing
+           even when content inside a column is hidden (e.g., via search).
+           On narrow viewports stack the columns. */
+        .selection-columns {
+            display: grid;
+            grid-template-columns: 33% 67%;
+            gap: 1.25rem;
+            align-items: start;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .left-col {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .right-col {
+            width: 100%;
+            min-width: 0;
+        }
+
+        @media (max-width: 720px) {
+            .selection-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+        /* Simple toggle switch styles (Buydowns) */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        .switch input { display: none; }
+        .switch .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            border-radius: 20px;
+            transition: background-color .15s ease;
+        }
+        .switch .slider:before {
+            content: "";
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            top: 2px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+            transition: transform .15s ease;
+        }
+        .switch input:checked + .slider {
+            background-color: #18bca8;
+        }
+        .switch input:checked + .slider:before {
+            transform: translateX(20px);
+        }
+        /* Ensure the label text aligns vertically with the switch */
+        .buydowns-switch {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Position the Buydowns switch absolutely so only the switch moves
+           (the label text remains in flow and stays right-aligned). We
+           anchor the absolute positioning to the `.top-row` container so
+           the switch can be placed at the same x-position as the
+           Alternatives switch below. Adjust `right` if you want a nudge. */
+        .top-row { position: relative; }
+        .top-row .buydowns-switch { position: relative; }
+        .top-row .buydowns-switch .switch {
+            position: absolute;
+            top: 50%;
+            right: 6.25rem; /* adjust this value to fine-tune alignment */
+            transform: translateY(-50%);
+        }
+        /* When present on body, suppress switch animations (used during initial restore) */
+        .no-switch-anim .switch .slider,
+        .no-switch-anim .switch .slider:before {
+            transition: none !important;
         }
 
         #circles {
@@ -67,15 +155,42 @@
     </style>
 </head>
 <body>
-    <div id="top-controls">
-        <input id="search-input" type="search" placeholder="Search spells..." aria-label="Search spells" />
-        <button id="no-spell-btn" class="circle-btn">No Spell</button>
-        <div id="special-buttons" style="margin-top:0.5rem; display:flex; gap:0.5rem;">
-            <button id="regional-btn" class="circle-btn">Regional</button>
-            <button id="alchemy-btn" class="circle-btn">Alchemy</button>
+    <nav class="top-nav">
+        <a class="nav-btn" href="../index.html">Spell List</a>
+    </nav>
+    <div class="selection-columns">
+        <div class="left-col">
+            <div id="top-controls">
+                <input id="search-input" type="search" placeholder="Search spells..." aria-label="Search spells" />
+                <div class="top-row" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                    <button id="no-spell-btn" class="circle-btn">No Spell</button>
+                    <div class="buydowns-switch">
+                        <label class="switch">
+                            <input id="buydowns-toggle" type="checkbox" />
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left:0.5rem; font-weight:600;">Buydowns</span>
+                    </div>
+                </div>
+                <div class="special-row" style="margin-top:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                    <div id="special-buttons" style="display:flex; gap:0.5rem;">
+                        <button id="regional-btn" class="circle-btn">Regional</button>
+                        <button id="alchemy-btn" class="circle-btn">Alchemy</button>
+                    </div>
+                    <div class="alternatives-switch buydowns-switch">
+                        <label class="switch">
+                            <input id="alternatives-toggle" type="checkbox" />
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left:0.5rem; font-weight:600;">Alternatives</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="right-col">
+            <div id="circles"></div>
         </div>
     </div>
-    <div id="circles"></div>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const container = document.getElementById('circles');
@@ -112,6 +227,17 @@
             // Expect format like "3-2". Extract the first number (circle index)
             const firstPart = selectedPosition.split('-')[0];
             const start = parseInt(firstPart, 10);
+
+            // If a 1st-circle slot is selected, hide the top-row Buydowns switch
+            // (do not affect the Alternatives switch which is a separate control).
+            try {
+                const topBuydowns = document.querySelector('.top-row .buydowns-switch');
+                if (topBuydowns && start === 1) {
+                    topBuydowns.style.display = 'none';
+                }
+            } catch (e) {
+                // ignore
+            }
 
             if (Number.isNaN(start) || start <= 0) {
                 const p = document.createElement('p');
@@ -228,6 +354,84 @@
                 searchInput.addEventListener('input', applyFilter);
                 // initial pass
                 applyFilter();
+                    // Initialize Buydowns toggle (default OFF -> hide all but highest)
+                try {
+                    const buydownsToggle = document.getElementById('buydowns-toggle');
+                    function updateBuydownsView() {
+                        const showOnlyHighest = !buydownsToggle.checked; // checked = ON (show all)
+                        const headers = container.querySelectorAll('h2');
+                        headers.forEach((h, idx) => {
+                            const btns = h.nextElementSibling && h.nextElementSibling.classList && h.nextElementSibling.classList.contains('circle-buttons') ? h.nextElementSibling : null;
+                            if (idx === 0) {
+                                h.style.display = '';
+                                if (btns) btns.style.display = '';
+                            } else {
+                                if (showOnlyHighest) {
+                                    h.style.display = 'none';
+                                    if (btns) btns.style.display = 'none';
+                                } else {
+                                    h.style.display = '';
+                                    if (btns) btns.style.display = '';
+                                }
+                            }
+                        });
+                    }
+                    if (buydownsToggle) {
+                        // load persisted value (default OFF) without animating the switch
+                        try {
+                            const stored = localStorage.getItem('buydowns');
+                            document.body.classList.add('no-switch-anim');
+                            buydownsToggle.checked = stored === null ? false : (stored === 'true');
+                        } catch (e) {
+                            buydownsToggle.checked = false;
+                        }
+                        // remove the suppression on the next frame so future toggles animate
+                        requestAnimationFrame(() => document.body.classList.remove('no-switch-anim'));
+
+                        buydownsToggle.addEventListener('change', () => {
+                            try { localStorage.setItem('buydowns', String(buydownsToggle.checked)); } catch (e) {}
+                            updateBuydownsView();
+                        });
+                        // apply initial state
+                        updateBuydownsView();
+                    }
+                } catch (e) {
+                    // ignore
+                }
+                // Initialize Alternatives toggle (default OFF -> hide Regional/Alchemy)
+                try {
+                    const alternativesToggle = document.getElementById('alternatives-toggle');
+                    const specialButtonsContainer = document.getElementById('special-buttons');
+                    function updateAlternativesView() {
+                        const show = !!(alternativesToggle && alternativesToggle.checked);
+                        if (specialButtonsContainer) {
+                            // Use visibility:hidden so the container keeps its layout
+                            // space (prevents the Alternatives switch from moving
+                            // vertically when the special buttons are hidden).
+                            specialButtonsContainer.style.visibility = show ? '' : 'hidden';
+                            // Also disable pointer events when hidden so buttons
+                            // aren't focusable or clickable.
+                            specialButtonsContainer.style.pointerEvents = show ? '' : 'none';
+                            specialButtonsContainer.setAttribute('aria-hidden', show ? 'false' : 'true');
+                        }
+                    }
+                    if (alternativesToggle) {
+                        // load persisted value (default OFF)
+                        try {
+                            const storedAlt = localStorage.getItem('alternatives');
+                            alternativesToggle.checked = storedAlt === null ? false : (storedAlt === 'true');
+                        } catch (e) {
+                            alternativesToggle.checked = false;
+                        }
+                        alternativesToggle.addEventListener('change', () => {
+                            try { localStorage.setItem('alternatives', String(alternativesToggle.checked)); } catch (e) {}
+                            updateAlternativesView();
+                        });
+                        updateAlternativesView();
+                    }
+                } catch (e) {
+                    // ignore
+                }
             }
 
             // When a circle button is clicked, navigate back to index and pass the selection

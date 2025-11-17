@@ -17,6 +17,57 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Mark the first empty slot by iterating columns first.
+    function markFirstEmptySlot() {
+        try {
+            // Clear any previous marking
+            document.querySelectorAll('.spell-slot.first-empty').forEach(el => el.classList.remove('first-empty'));
+
+            // Gather all positions present in the DOM to determine grid bounds
+            const slots = Array.from(document.querySelectorAll('.spell-slot'))
+                .filter(s => !s.classList.contains('clear-btn') && !s.classList.contains('alchemy-label'));
+
+            let maxRow = 0, maxCol = 0;
+            const positions = new Set();
+            slots.forEach(s => {
+                const pos = s.dataset.position;
+                if (!pos) return;
+                positions.add(pos);
+                const parts = String(pos).split('-').map(x => parseInt(x,10));
+                if (parts.length >= 2) {
+                    const [r,c] = parts;
+                    if (!Number.isNaN(r) && !Number.isNaN(c)) {
+                        if (r > maxRow) maxRow = r;
+                        if (c > maxCol) maxCol = c;
+                    }
+                }
+            });
+
+            // Fallback bounds if none detected
+            if (maxRow === 0) maxRow = 8;
+            if (maxCol === 0) maxCol = 3;
+
+            let marked = false;
+            for (let col = 1; col <= maxCol && !marked; col++) {
+                for (let row = 1; row <= maxRow && !marked; row++) {
+                    const key = `${row}-${col}`;
+                    if (!positions.has(key)) continue; // position not present in DOM
+                    const el = document.querySelector(`.spell-slot[data-position="${key}"]`);
+                    if (!el) continue;
+                    // Skip non-interactable labels and clear button
+                    if (el.classList.contains('clear-btn') || el.classList.contains('alchemy-label')) continue;
+                    // Consider a slot occupied if it has the 'selected' class
+                    if (!el.classList.contains('selected')) {
+                        el.classList.add('first-empty');
+                        marked = true;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('markFirstEmptySlot error', e);
+        }
+    }
+
     // If the index was opened with ?pos=...&spell=..., update the stored map first
     try {
         const params = new URLSearchParams(window.location.search);
@@ -123,6 +174,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // ignore
     }
 
+    // After rehydration, mark the first empty slot (iterate columns first).
+    try {
+        markFirstEmptySlot();
+    } catch (e) {
+        // ignore
+    }
+
     const spellGrid = document.querySelector('.spell-grid');
 
     spellGrid.addEventListener('click', (event) => {
@@ -177,6 +235,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     alchemyEl.textContent = 'Alchemy Points: 0';
                     alchemyEl.classList.remove('selected');
                 }
+            } catch (e) {
+                // ignore
+            }
+
+            // Recompute and mark the first empty slot now that DOM was cleared
+            try {
+                markFirstEmptySlot();
             } catch (e) {
                 // ignore
             }

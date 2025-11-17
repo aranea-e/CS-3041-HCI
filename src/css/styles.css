@@ -2,24 +2,89 @@ body {
     display: flex;
     justify-content: center;
     margin: 0;
-    background-color: #f0f0f0;
+    background-color: #FFFFFF;
     font-family: Arial, sans-serif;
     min-height: 100vh;
 }
 
+/* Top navigation bar variables and layout */
+:root {
+    --top-nav-height: 56px;
+}
+
+/* Highlight color for hovered/focused buttons */
+:root {
+    --highlight-color: #18bca8;
+}
+
+/* Reserve space for the fixed top nav so page content is pushed down */
+body {
+    padding-top: var(--top-nav-height);
+}
+
+.top-nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--top-nav-height);
+    background: #2c3e50;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    padding: 0 1rem;
+    box-sizing: border-box;
+}
+
+.top-nav .nav-btn {
+    color: #fff;
+    text-decoration: none;
+    background: transparent;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    padding: 0.5rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.top-nav .nav-btn:focus,
+.top-nav .nav-btn:hover {
+    opacity: 0.95;
+}
+
+/* Nav button highlight color */
+.top-nav .nav-btn:hover,
+.top-nav .nav-btn:focus,
+.top-nav .nav-btn:active {
+    color: var(--highlight-color);
+}
+
+/* Circle option buttons highlight color */
+.circle-btn:hover,
+.circle-btn:focus,
+.circle-btn:active {
+    color: var(--highlight-color);
+}
+
 .spell-grid {
-    margin-top: 2rem;
+    /* reduce space below the fixed header so the chart sits closer to it */
+    margin-top: 0.5rem;
     display: grid;
     grid-template-columns: repeat(3, minmax(133px, 1fr));
     grid-template-rows: repeat(8, 1fr);
     gap: 0.95rem;
     padding: 1.66rem;
-    background-color: #fff;
+    background-color: #F2F2F2;
     border-radius: 9px;
-    box-shadow: 0 0 14px rgba(0,0,0,0.1);
+    box-shadow: none;
     max-width: 798px;
     width: 90%;
-    height: fit-content;
+    /* Ensure the grid fits within the viewport (accounting for fixed top nav)
+       so all rows are visible without page scrolling. Leave a small bottom
+       margin so content doesn't touch the viewport edge. */
+    height: calc(100vh - var(--top-nav-height) - 40px);
+    margin-bottom: 16px;
 }
 
 .spell-slot, .middle-extra {
@@ -45,10 +110,12 @@ body {
     font-weight: 700;
 }
 
-.spell-slot:hover, .middle-extra:hover {
+.spell-slot:hover, .spell-slot:focus, .spell-slot:active,
+.middle-extra:hover, .middle-extra:focus, .middle-extra:active {
     background-color: #f8f8f8;
     border-color: #666;
     transform: translateY(-1.4px);
+    color: var(--highlight-color);
 }
 
 .middle-extra {
@@ -75,6 +142,16 @@ body {
     /* make it non-interactive */
     pointer-events: none;
     cursor: default;
+}
+
+/* Alternate row backgrounds: odd rows remain white (default), even rows use #F2F2F2.
+   We target spell slots by their data-position prefix so the visuals follow grid rows.
+   The options textbox (`.options-box`) remains white by its own rule. */
+.spell-slot[data-position^="2-"],
+.spell-slot[data-position^="4-"],
+.spell-slot[data-position^="6-"],
+.spell-slot[data-position^="8-"] {
+    background-color: #F2F2F2;
 }
 
 /* Options box spans 6-1,6-2,7-1,7-2 (two columns x two rows) */
@@ -165,4 +242,21 @@ body {
 .no-transition .middle-extra,
 .no-transition .options-box {
     transition: none !important;
+}
+
+/* Keep the Alternatives switch aligned to the right even when the
+   left-side special buttons (Regional/Alchemy) are removed. Using
+   margin-left:auto on the switch ensures it stays pinned to the
+   far edge of the flex container regardless of sibling presence. */
+.special-row .alternatives-switch {
+    margin-left: auto;
+}
+
+/* Ensure the special-row keeps a consistent vertical height so the
+   Alternatives switch doesn't jump up/down when the left-side buttons
+   are hidden. The value is modest and responsive-friendly. */
+.special-row {
+    min-height: 2.2rem; /* ~35px */
+    display: flex; /* ensure flex behavior if not set inline */
+    align-items: center;
 }
