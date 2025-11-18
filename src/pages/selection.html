@@ -179,7 +179,7 @@
 </head>
 <body>
     <nav class="top-nav">
-        <a class="nav-btn" href="../index.html">Spell List</a>
+        <a class="nav-btn" href="spelllist.html">Spell List</a>
     </nav>
     <div class="selection-columns">
         <div class="left-col">
@@ -1054,9 +1054,9 @@
 
                     // Escape key: return to index page
                     document.addEventListener('keydown', (ev) => {
-                        if (ev.key === 'Escape' || ev.key === 'Esc') {
+                            if (ev.key === 'Escape' || ev.key === 'Esc') {
                             ev.preventDefault();
-                            window.location.href = '../index.html';
+                            window.location.href = 'spelllist.html';
                         }
                     });
                     })();
@@ -1083,7 +1083,7 @@
                     // ignore
                 }
 
-                const goto = `../index.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                const goto = `spelllist.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
                 window.location.href = goto;
             });
 
@@ -1107,7 +1107,7 @@
                     }
 
                     // Return to index; instruct index to clear this specific position
-                    window.location.href = `../index.html?clearedPos=${encodeURIComponent(pos)}`;
+                    window.location.href = `spelllist.html?clearedPos=${encodeURIComponent(pos)}`;
                 });
             }
 
@@ -1135,7 +1135,7 @@
                         // ignore
                     }
 
-                    const goto = `../index.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                    const goto = `spelllist.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
                     window.location.href = goto;
                 });
             }

@@ -7,9 +7,9 @@ The Spellbook Organizer is a web application designed for Live-Action Role-Playi
 ```
 spellbook-larp
 ├── src
-│   ├── index.html          # Main HTML document for the application
 │   ├── pages
-│   │   └── selection.html  # Blank HTML document for spell selection
+│   │   ├── spelllist.html   # Main HTML document for the application
+│   │   └── selection.html   # Spell selection page
 │   ├── css
 │   │   └── styles.css      # CSS styles for the application
 │   └── js
@@ -36,7 +36,7 @@ spellbook-larp
    ```
 
 ### Running the Application
-- Open `src/index.html` in your web browser to view the application.
+- Open `src/pages/spelllist.html` in your web browser to view the application.
 
 ### Usage
 - Click on any of the "Select Spell" buttons to navigate to the selection page. The selection page is currently blank and can be populated with spell details in the future.

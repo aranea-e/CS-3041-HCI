@@ -584,6 +584,6 @@ function navigateToSelection(position) {
     }
 
     // Pass position in query string as a fallback (works even when sessionStorage isn't available)
-    const url = `pages/selection.html?pos=${encodeURIComponent(position)}`;
+    const url = `selection.html?pos=${encodeURIComponent(position)}`;
     window.location.href = url;
 }
