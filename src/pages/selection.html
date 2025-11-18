@@ -1006,13 +1006,28 @@
                         // Activation via Enter/Space
                         document.addEventListener('keydown', (ev) => {
                             if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                            // If the search input is focused, allow Space to be typed
+                            try {
+                                const active = document.activeElement;
+                                if (ev.key === ' ' && active && active === searchInput) {
+                                    // Let the browser insert a space into the search box
+                                    return;
+                                }
+                            } catch (e) {}
                             ev.preventDefault();
                             // Prefer the element represented by the current grid coord
-                            let el = elementForCoord(cur);
-                            // If no grid element (we might be in the right-column list),
-                            // try the selected right-column element or the active element
-                            if (!el) {
-                                el = rightSelectedEl || document.querySelector('.circle-btn.kbd-selected') || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('circle-btn') ? document.activeElement : null);
+                            // but if we're navigating the right-column list, prefer the
+                            // right-selected element so Space/Enter activate it.
+                            let el = null;
+                            if (inRightList && rightSelectedEl) {
+                                el = rightSelectedEl;
+                            } else {
+                                el = elementForCoord(cur);
+                                // If no grid element (we might be in the right-column list),
+                                // try the selected right-column element or the active element
+                                if (!el) {
+                                    el = rightSelectedEl || document.querySelector('.circle-btn.kbd-selected') || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('circle-btn') ? document.activeElement : null);
+                                }
                             }
                             if (!el) return;
 
