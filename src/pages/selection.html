@@ -472,6 +472,15 @@
                         let cur = {r:0, c:0};
                         // last movement direction used to resolve (1,1) behavior
                         let lastDir = null; // 'vertical' or 'horizontal'
+                        // track when focus has moved into the right-column spell list
+                        let inRightList = false;
+                        // remember previous grid coord so we can return from right list
+                        let prevGridCur = {r:0,c:0};
+                        // the currently-selected element in the right list
+                        let rightSelectedEl = null;
+                        // remember the last row index user was in while in right list
+                        // (used to restore that row when re-entering the right list)
+                        let rememberedRightRow = null;
 
                         function mod3(n) { return ((n % 3) + 3) % 3; }
 
@@ -560,6 +569,23 @@
                             if (!el) return;
                             clearSelectionVisuals();
                             applySelectionVisual(el);
+                            // Ensure the newly focused element is visible (switches included)
+                            try {
+                                const header = document.querySelector('.top-nav');
+                                const headerH = header ? header.getBoundingClientRect().height : 0;
+                                const rect = el.getBoundingClientRect();
+                                const padding = 8; // extra space below header
+                                const offset = Math.max(padding, headerH + padding);
+                                // If the element would be hidden behind the header or offscreen,
+                                // scroll so its top sits just below the header (with padding).
+                                const elTop = rect.top;
+                                const elBottom = rect.bottom;
+                                const viewportH = window.innerHeight || document.documentElement.clientHeight;
+                                if (elTop < offset || elBottom > viewportH - padding) {
+                                    const desiredTop = Math.max(0, window.scrollY + rect.top - offset);
+                                    window.scrollTo({ top: desiredTop, left: 0, behavior: 'auto' });
+                                }
+                            } catch (e) {}
                             // Blur any previously focused element so its native focus styling
                             // (blue outline) is removed immediately when we change selection.
                             try {
@@ -583,8 +609,211 @@
 
                         // Handle key navigation
                         document.addEventListener('keydown', (ev) => {
-                            const arrows = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+                            const arrows = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown'];
                             if (!arrows.includes(ev.key)) return;
+
+                            // If an input inside our left-column controls is focused
+                            // (search input or the switch inputs), treat horizontal
+                            // arrow presses as navigation away from the control rather
+                            // than letting caret/toggle behavior consume them.
+                            try {
+                                const active = document.activeElement;
+                                if (active) {
+                                    // search input
+                                    if (active === searchInput && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+                                        ev.preventDefault();
+                                        try { active.blur(); } catch (e) {}
+                                        // ensure our grid coord matches the search box
+                                        cur = {r:0,c:0};
+                                    }
+                                    // buydowns/alternatives inner inputs
+                                    else if (active.closest && active.closest('.buydowns-switch') && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+                                        ev.preventDefault();
+                                        try { active.blur(); } catch (e) {}
+                                        cur = {r:1,c:2};
+                                    } else if (active.closest && active.closest('.alternatives-switch') && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) {
+                                        ev.preventDefault();
+                                        try { active.blur(); } catch (e) {}
+                                        cur = {r:2,c:2};
+                                    }
+                                }
+                            } catch (e) {
+                                // ignore
+                            }
+                            // If we're in the right-column list, handle navigation there
+                            if (inRightList) {
+                                ev.preventDefault();
+                                const allButtons = Array.from(container.querySelectorAll('.circle-btn'))
+                                    .filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                                if (!allButtons.length) return;
+
+                                // Helper: build spatial rows by Y position (tolerance-based)
+                                function buildRows(buttons) {
+                                    const rows = [];
+                                    const TOL = 8; // px tolerance for grouping
+                                    buttons.forEach(b => {
+                                        const r = b.getBoundingClientRect();
+                                        const top = Math.round(r.top);
+                                        let found = false;
+                                        for (const row of rows) {
+                                            if (Math.abs(row.top - top) <= TOL) {
+                                                row.items.push(b);
+                                                // average the row top for stability
+                                                row.top = Math.round((row.top + top) / 2);
+                                                found = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!found) rows.push({top: top, items: [b]});
+                                    });
+                                    // sort rows top->bottom and each row left->right
+                                    rows.sort((a,b) => a.top - b.top);
+                                    rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left));
+                                    return rows;
+                                }
+
+                                const rows = buildRows(allButtons);
+
+                                // helper: get index of row containing element
+                                function findRowIndex(el) {
+                                    for (let i=0;i<rows.length;i++) if (rows[i].items.indexOf(el) !== -1) return i;
+                                    return -1;
+                                }
+
+                                // helper: pick nearest element in a row to a given centerX
+                                function nearestInRow(rowIdx, centerX) {
+                                    const items = rows[rowIdx].items;
+                                    if (!items || items.length === 0) return null;
+                                    let best = items[0];
+                                    let bestDist = Math.abs((best.getBoundingClientRect().left + best.getBoundingClientRect().right)/2 - centerX);
+                                    for (let j=1;j<items.length;j++) {
+                                        const it = items[j];
+                                        const rect = it.getBoundingClientRect();
+                                        const cx = (rect.left + rect.right)/2;
+                                        const d = Math.abs(cx - centerX);
+                                        if (d < bestDist) { bestDist = d; best = it; }
+                                    }
+                                    return best;
+                                }
+
+                                // helper: nearest grid row anchor (0,1,2) by Y
+                                function nearestGridRowByY(centerY) {
+                                    const anchors = [];
+                                    if (searchInput) anchors.push({el: searchInput, r:0});
+                                    if (noSpellBtn) anchors.push({el: noSpellBtn, r:1});
+                                    const specialContainer = document.getElementById('special-buttons');
+                                    if (specialContainer) anchors.push({el: specialContainer, r:2});
+                                    let bestR = 0; let bestD = Infinity;
+                                    anchors.forEach(a => {
+                                        const rect = a.el.getBoundingClientRect();
+                                        const cy = (rect.top + rect.bottom)/2;
+                                        const d = Math.abs(cy - centerY);
+                                        if (d < bestD) { bestD = d; bestR = a.r; }
+                                    });
+                                    return bestR;
+                                }
+
+                                // helper: find container index (circle-buttons) for current selection
+                                function findContainerIndexForEl(el) {
+                                    const containers = Array.from(container.querySelectorAll('.circle-buttons'))
+                                        .filter(c => c.offsetParent !== null && getComputedStyle(c).display !== 'none');
+                                    for (let i=0;i<containers.length;i++) {
+                                        if (containers[i].contains(el)) return {containers, idx:i};
+                                    }
+                                    return {containers, idx:-1};
+                                }
+
+                                // current target element
+                                const curEl = rightSelectedEl || allButtons[0];
+                                const curRect = curEl.getBoundingClientRect();
+                                const curCX = (curRect.left + curRect.right)/2;
+                                const curCY = (curRect.top + curRect.bottom)/2;
+
+                                // Handle PageUp/PageDown: move to first option in previous/next circle
+                                if (ev.key === 'PageUp' || ev.key === 'PageDown') {
+                                    const {containers, idx} = findContainerIndexForEl(curEl);
+                                    if (!containers.length) return;
+                                    const dir = ev.key === 'PageDown' ? 1 : -1;
+                                    let nextIdx = idx === -1 ? 0 : (idx + dir + containers.length) % containers.length;
+                                    const targetContainer = containers[nextIdx];
+                                    // pick the first visible .circle-btn in DOM order
+                                    const buttons = Array.from(targetContainer.querySelectorAll('.circle-btn')).filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                                    if (!buttons.length) return;
+                                    const pick = buttons[0];
+                                    clearSelectionVisuals();
+                                    rightSelectedEl = pick;
+                                    applySelectionVisual(pick);
+                                    try { pick.focus(); } catch (e) {}
+                                    return;
+                                }
+
+                                // Find current row and index
+                                let rowIdx = findRowIndex(curEl);
+                                if (rowIdx === -1) {
+                                    // If the element isn't in any clustered row (rare), rebuild rows and pick first
+                                    rowIdx = 0;
+                                }
+
+                                // Left/Right movement within the same row
+                                if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+                                    const items = rows[rowIdx].items;
+                                    const idx = items.indexOf(curEl);
+                                    const dir = ev.key === 'ArrowRight' ? 1 : -1;
+                                    const newIdx = idx + dir;
+                                    if (newIdx >= 0 && newIdx < items.length) {
+                                        const newEl = items[newIdx];
+                                        clearSelectionVisuals();
+                                        rightSelectedEl = newEl;
+                                        applySelectionVisual(newEl);
+                                        try { newEl.focus(); } catch (e) {}
+                                        return;
+                                    }
+
+                                    // moved off the list horizontally: map to left/right side of 3x3 grid
+                                    const firstVisibleRect = items[0].getBoundingClientRect();
+                                    const centerY = (firstVisibleRect.top + firstVisibleRect.bottom)/2;
+                                    const targetGridRow = nearestGridRowByY(curCY);
+                                    // If moved off right side, land on left side of grid (c=0)
+                                    if (ev.key === 'ArrowRight') {
+                                        // remember the row we were on before leaving
+                                        rememberedRightRow = rowIdx >= 0 ? rowIdx : rememberedRightRow;
+                                        inRightList = false;
+                                        cur = {r: targetGridRow, c: 0};
+                                        rightSelectedEl = null;
+                                        focusCoord(cur);
+                                        return;
+                                    }
+                                    // If moved off left side, land on right side of grid (c=2)
+                                    if (ev.key === 'ArrowLeft') {
+                                        // remember the row we were on before leaving
+                                        rememberedRightRow = rowIdx >= 0 ? rowIdx : rememberedRightRow;
+                                        inRightList = false;
+                                        cur = {r: targetGridRow, c: 2};
+                                        rightSelectedEl = null;
+                                        focusCoord(cur);
+                                        return;
+                                    }
+                                }
+
+                                // Up/Down move between rows (wrap)
+                                if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
+                                    const dir = ev.key === 'ArrowDown' ? 1 : -1;
+                                    const nextRow = (rowIdx + dir + rows.length) % rows.length;
+                                    // pick element in nextRow nearest to current centerX
+                                    const pick = nearestInRow(nextRow, curCX) || rows[nextRow].items[0];
+                                    if (pick) {
+                                        clearSelectionVisuals();
+                                        rightSelectedEl = pick;
+                                        applySelectionVisual(pick);
+                                        try { pick.focus(); } catch (e) {}
+                                    }
+                                    return;
+                                }
+
+                                // Fallback: do nothing
+                                return;
+                            }
+
                             ev.preventDefault();
 
                             let attempted = {r:cur.r, c:cur.c};
@@ -594,18 +823,199 @@
                             if (ev.key === 'ArrowLeft') { attempted.c = mod3(cur.c - 1); dir = 'horizontal'; }
                             if (ev.key === 'ArrowRight') { attempted.c = mod3(cur.c + 1); dir = 'horizontal'; }
 
+                            // If the user attempted to move horizontally off either side
+                            // of the 3x3 grid, or from certain special cells when
+                            // corresponding controls are hidden, jump into the
+                            // right-column spell list.
+                            // Default off-left: at leftmost column and press Left
+                            let movingOffLeft = dir === 'horizontal' && ev.key === 'ArrowLeft' && cur.c === 0;
+                            // Default off-right: at rightmost column and press Right
+                            let movingOffRight = dir === 'horizontal' && ev.key === 'ArrowRight' && cur.c === 2;
+
+                            // Special case: pressing Right from the search field (0,0)
+                            // should behave as moving off horizontally to the right.
+                            if (dir === 'horizontal' && ev.key === 'ArrowRight' && cur.r === 0 && cur.c === 0) {
+                                movingOffRight = true;
+                            }
+
+                            // Special case: pressing Right from No Spell (1,0) when the
+                            // Buydowns control is absent/hidden should act as moving off
+                            // to the right (so we jump into the right-column list).
+                            if (dir === 'horizontal' && ev.key === 'ArrowRight' && cur.r === 1 && cur.c === 0) {
+                                if (!topBuydowns || topBuydowns.style.display === 'none') movingOffRight = true;
+                            }
+
+                            // Special case: pressing Left from the Alternatives cell
+                            // (2,2) when the special buttons (Regional/Alchemy) are
+                            // hidden should behave as moving off to the left.
+                            const altOn = !!(alternativesToggle && alternativesToggle.checked);
+                            if (dir === 'horizontal' && ev.key === 'ArrowLeft' && cur.r === 2 && cur.c === 2 && !altOn) {
+                                movingOffLeft = true;
+                            }
+                            if (movingOffLeft || movingOffRight) {
+                                const rightButtonsAll = Array.from(container.querySelectorAll('.circle-btn'))
+                                    .filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                                if (rightButtonsAll.length) {
+                                    // cluster into rows by Y so we can pick leftmost/rightmost in a row
+                                    const TOL = 8;
+                                    const rows = [];
+                                    rightButtonsAll.forEach(b => {
+                                        const r = b.getBoundingClientRect();
+                                        const top = Math.round(r.top);
+                                        let found = false;
+                                        for (const row of rows) {
+                                            if (Math.abs(row.top - top) <= TOL) { row.items.push(b); row.top = Math.round((row.top + top)/2); found = true; break; }
+                                        }
+                                        if (!found) rows.push({top: top, items: [b]});
+                                    });
+                                    rows.sort((a,b) => a.top - b.top);
+                                    rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left));
+
+                                    // choose target row: remember previous row if available, else find nearest
+                                    let targetRowIdx = 0;
+                                    if (rememberedRightRow !== null && rememberedRightRow >= 0 && rememberedRightRow < rows.length) {
+                                        targetRowIdx = rememberedRightRow;
+                                    } else {
+                                        // find row nearest to the current grid row y position
+                                        const centerY = (() => {
+                                            // approximate using anchors
+                                            const anchors = [];
+                                            if (searchInput) anchors.push(searchInput.getBoundingClientRect());
+                                            if (noSpellBtn) anchors.push(noSpellBtn.getBoundingClientRect());
+                                            const specialContainer = document.getElementById('special-buttons');
+                                            if (specialContainer) anchors.push(specialContainer.getBoundingClientRect());
+                                            if (!anchors.length) return rows[0].items[0].getBoundingClientRect().top;
+                                            const idx = Math.min(Math.max(cur.r,0), anchors.length-1);
+                                            const rect = anchors[idx];
+                                            return (rect.top + rect.bottom)/2;
+                                        })();
+                                        let bestD = Infinity;
+                                        for (let i=0;i<rows.length;i++) {
+                                            const r = rows[i];
+                                            const rect = r.items[0].getBoundingClientRect();
+                                            const cy = (rect.top + rect.bottom)/2;
+                                            const d = Math.abs(cy - centerY);
+                                            if (d < bestD) { bestD = d; targetRowIdx = i; }
+                                        }
+                                    }
+
+                                    // pick leftmost if we moved off the right side of the grid,
+                                    // or pick rightmost if we moved off the left side
+                                    const targetItems = rows[targetRowIdx].items;
+                                    let pick = null;
+                                    if (movingOffRight) pick = targetItems[0];
+                                    else if (movingOffLeft) pick = targetItems[targetItems.length-1];
+
+                                    if (!pick) pick = rightButtonsAll[0];
+
+                                    prevGridCur = {r: cur.r, c: cur.c};
+                                    inRightList = true;
+                                    rightSelectedEl = pick;
+                                    clearSelectionVisuals();
+                                    applySelectionVisual(pick);
+                                    try { pick.focus(); } catch (e) {}
+                                    return;
+                                }
+                            }
+
                             const final = normalizeCoord(cur, attempted, dir);
                             lastDir = dir;
                             cur = final;
                             focusCoord(cur);
                         });
+                        
+                        // Hover-to-select: respond to mouse movement over interactive elements
+                        (function setupHoverToSelect() {
+                            let lastHovered = null;
+                            document.addEventListener('mousemove', (ev) => {
+                                try {
+                                    const active = document.activeElement;
+                                    const tag = (active && active.tagName) || '';
+                                    // Allow hover-to-select when the search input is focused
+                                    // but ignore when typing into other inputs like textareas/selects.
+                                    if (tag === 'TEXTAREA' || tag === 'SELECT') return;
+                                    if (tag === 'INPUT' && active !== searchInput) return;
+
+                                    const hovered = ev.target.closest('.circle-btn, .buydowns-switch, .alternatives-switch, #search-input, #no-spell-btn, #regional-btn, #alchemy-btn');
+                                    if (!hovered) { lastHovered = null; return; }
+                                    if (hovered === lastHovered) return;
+                                    lastHovered = hovered;
+
+                                    // Ignore the visual-only alchemy label when hovered
+                                    if (hovered.id === 'alchemy-points') return;
+
+                                    // If hover is on a switch container. Check Alternatives first
+                                    // because the Alternatives element also includes the
+                                    // 'buydowns-switch' class in the markup.
+                                    if (hovered.classList && (hovered.classList.contains('alternatives-switch') || hovered.classList.contains('buydowns-switch'))) {
+                                        // Focus the corresponding left-column coordinate
+                                        inRightList = false;
+                                        if (hovered.classList.contains('alternatives-switch')) {
+                                            cur = {r:2, c:2};
+                                        } else {
+                                            cur = {r:1, c:2};
+                                        }
+                                        rightSelectedEl = null;
+                                        focusCoord(cur);
+                                        return;
+                                    }
+
+                                    // Search input and left-column buttons
+                                    if (hovered.id === 'search-input') { inRightList = false; cur = {r:0,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                                    if (hovered.id === 'no-spell-btn') { inRightList = false; cur = {r:1,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                                    if (hovered.id === 'regional-btn') { inRightList = false; cur = {r:2,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                                    if (hovered.id === 'alchemy-btn') { inRightList = false; cur = {r:2,c:1}; rightSelectedEl = null; focusCoord(cur); return; }
+
+                                    // If hovered is a right-column option (.circle-btn)
+                                    if (hovered.classList && hovered.classList.contains('circle-btn')) {
+                                        // Mark we're in the right list and select the hovered element
+                                        inRightList = true;
+                                        rightSelectedEl = hovered;
+
+                                        // Build rows to find the hovered row index and remember it
+                                        const allButtons = Array.from(container.querySelectorAll('.circle-btn'))
+                                            .filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                                        const rows = [];
+                                        const TOL = 8;
+                                        allButtons.forEach(b => {
+                                            const r = b.getBoundingClientRect();
+                                            const top = Math.round(r.top);
+                                            let found = false;
+                                            for (const row of rows) {
+                                                if (Math.abs(row.top - top) <= TOL) { row.items.push(b); row.top = Math.round((row.top + top)/2); found = true; break; }
+                                            }
+                                            if (!found) rows.push({top: top, items: [b]});
+                                        });
+                                        rows.sort((a,b) => a.top - b.top);
+                                        rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left));
+                                        // find hovered row index
+                                        for (let i=0;i<rows.length;i++) {
+                                            if (rows[i].items.indexOf(hovered) !== -1) { rememberedRightRow = i; break; }
+                                        }
+
+                                        clearSelectionVisuals();
+                                        applySelectionVisual(hovered);
+                                        try { hovered.focus(); } catch (e) {}
+                                    }
+                                } catch (e) {
+                                    // ignore hover errors
+                                }
+                            }, { passive: true });
+                        })();
 
                         // Activation via Enter/Space
                         document.addEventListener('keydown', (ev) => {
                             if (ev.key !== 'Enter' && ev.key !== ' ') return;
-                            const el = elementForCoord(cur);
-                            if (!el) return;
                             ev.preventDefault();
+                            // Prefer the element represented by the current grid coord
+                            let el = elementForCoord(cur);
+                            // If no grid element (we might be in the right-column list),
+                            // try the selected right-column element or the active element
+                            if (!el) {
+                                el = rightSelectedEl || document.querySelector('.circle-btn.kbd-selected') || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('circle-btn') ? document.activeElement : null);
+                            }
+                            if (!el) return;
+
                             // If a switch container, toggle the nested checkbox
                             if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) {
                                 const input = el.querySelector('input');

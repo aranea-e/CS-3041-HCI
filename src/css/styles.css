@@ -60,11 +60,12 @@ body {
     color: var(--highlight-color);
 }
 
-/* Circle option buttons highlight color */
+/* Circle option buttons: remove text color change on mouse hover/focus/active
+   — keep keyboard selection responsible for applying the highlight color. */
 .circle-btn:hover,
 .circle-btn:focus,
 .circle-btn:active {
-    color: var(--highlight-color);
+    /* no color change on mouse hover; keyboard navigation applies .kbd-selected */
 }
 
 .spell-grid {
@@ -115,7 +116,7 @@ body {
     background-color: #f8f8f8;
     border-color: #666;
     transform: translateY(-1.4px);
-    color: var(--highlight-color);
+    /* Do not change text color on mouse hover — keep highlight for keyboard only */
 }
 
 .middle-extra {
