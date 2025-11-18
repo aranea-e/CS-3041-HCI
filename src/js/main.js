@@ -181,6 +181,311 @@ document.addEventListener('DOMContentLoaded', () => {
         // ignore
     }
 
+    // --- Keyboard navigation implementation ---
+    (function setupKeyboardNavigation() {
+        // Build grid model from DOM
+        const allSlots = Array.from(document.querySelectorAll('.spell-slot'));
+        const clearEl = document.querySelector('.spell-slot.clear-btn');
+        const alchemyEl = document.querySelector('.spell-slot.alchemy-label');
+
+        const grid = {}; // grid[col] = sorted array of rows
+        let minCol = Infinity, maxCol = -Infinity;
+        let minRow = Infinity, maxRow = -Infinity;
+
+        allSlots.forEach(el => {
+            const pos = el.dataset.position;
+            if (!pos) return;
+            const parts = String(pos).split('-').map(x => parseInt(x,10));
+            if (parts.length < 2) return;
+            const [r,c] = parts;
+            if (Number.isNaN(r) || Number.isNaN(c)) return;
+            // Skip the alchemy label and the Clear button as they are non-interactable
+            if (el === alchemyEl) return;
+            if (el === clearEl) return;
+
+            if (!grid[c]) grid[c] = new Set();
+            grid[c].add(r);
+            if (c < minCol) minCol = c;
+            if (c > maxCol) maxCol = c;
+            if (r < minRow) minRow = r;
+            if (r > maxRow) maxRow = r;
+        });
+
+        // Convert sets to sorted arrays
+        Object.keys(grid).forEach(k => {
+            const arr = Array.from(grid[k]);
+            arr.sort((a,b) => a-b);
+            grid[k] = arr;
+        });
+
+        // Helper to get element for a given row/col
+        function elFor(row, col) {
+            return document.querySelector(`.spell-slot[data-position="${row}-${col}"]`);
+        }
+
+        // Find closest row in column to targetRow
+        function closestRowInColumn(col, targetRow) {
+            const rows = grid[col];
+            if (!rows || rows.length === 0) return null;
+            // exact match
+            if (rows.indexOf(targetRow) !== -1) return targetRow;
+            // otherwise find minimal distance
+            let best = rows[0]; let bestDist = Math.abs(rows[0] - targetRow);
+            for (let i=1;i<rows.length;i++){
+                const d = Math.abs(rows[i]-targetRow);
+                if (d < bestDist) { bestDist = d; best = rows[i]; }
+            }
+            return best;
+        }
+
+        // State
+        let navState = { type: 'cell', row: null, col: null };
+        let lastColumnWhileClear = null;
+
+        // Initialize selection: prefer `.first-empty` if present, otherwise
+        // fall back to top-left (smallest col, smallest row available).
+        function initSelection() {
+            try {
+                const fe = document.querySelector('.spell-slot.first-empty');
+                if (fe && fe.dataset && fe.dataset.position) {
+                    const parts = fe.dataset.position.split('-').map(x=>parseInt(x,10));
+                    if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
+                        navState.type = 'cell';
+                        navState.row = parts[0];
+                        navState.col = parts[1];
+                        lastColumnWhileClear = navState.col;
+                        applyVisualSelection();
+                        return;
+                    }
+                }
+            } catch (e) {
+                // ignore and fallback
+            }
+
+            // Fallback: Prefer smallest row in smallest column
+            const cols = Object.keys(grid).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+            for (let ci=0; ci<cols.length; ci++){
+                const col = cols[ci];
+                const rows = grid[col];
+                if (!rows || rows.length===0) continue;
+                // choose top row in that column
+                navState.type = 'cell';
+                navState.col = col;
+                navState.row = rows[0];
+                lastColumnWhileClear = col;
+                applyVisualSelection();
+                return;
+            }
+            // fallback: select clear if nothing else
+            if (clearEl) {
+                navState.type = 'clear';
+                applyVisualSelection();
+            }
+        }
+
+        function applyVisualSelection() {
+            // Remove previous markers
+            document.querySelectorAll('.spell-slot.kbd-selected').forEach(s => s.classList.remove('kbd-selected'));
+            if (navState.type === 'cell') {
+                const el = elFor(navState.row, navState.col);
+                if (el) {
+                    el.classList.add('kbd-selected');
+                    try { el.focus(); } catch(e) {}
+                }
+            } else if (navState.type === 'clear') {
+                if (clearEl) {
+                    clearEl.classList.add('kbd-selected');
+                    try { clearEl.focus(); } catch(e) {}
+                }
+            }
+        }
+
+        function moveLeft() {
+            if (navState.type === 'clear') {
+                // rotate column and remain on clear
+                const cols = Object.keys(grid).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+                if (cols.length === 0) return;
+                let idx = cols.indexOf(lastColumnWhileClear || cols[0]);
+                idx = (idx - 1 + cols.length) % cols.length;
+                lastColumnWhileClear = cols[idx];
+                applyVisualSelection();
+                return;
+            }
+            // compute next column with wrap
+            const cols = Object.keys(grid).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+            if (cols.length === 0) return;
+            let curIdx = cols.indexOf(navState.col);
+            if (curIdx === -1) curIdx = 0;
+            const nextIdx = (curIdx - 1 + cols.length) % cols.length;
+            const nextCol = cols[nextIdx];
+            const targetRow = closestRowInColumn(nextCol, navState.row);
+            if (targetRow === null) return;
+            navState.col = nextCol; navState.row = targetRow; navState.type = 'cell';
+            applyVisualSelection();
+        }
+
+        function moveRight() {
+            if (navState.type === 'clear') {
+                const cols = Object.keys(grid).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+                if (cols.length === 0) return;
+                let idx = cols.indexOf(lastColumnWhileClear || cols[0]);
+                idx = (idx + 1) % cols.length;
+                lastColumnWhileClear = cols[idx];
+                applyVisualSelection();
+                return;
+            }
+            const cols = Object.keys(grid).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+            if (cols.length === 0) return;
+            let curIdx = cols.indexOf(navState.col);
+            if (curIdx === -1) curIdx = 0;
+            const nextIdx = (curIdx + 1) % cols.length;
+            const nextCol = cols[nextIdx];
+            const targetRow = closestRowInColumn(nextCol, navState.row);
+            if (targetRow === null) return;
+            navState.col = nextCol; navState.row = targetRow; navState.type = 'cell';
+            applyVisualSelection();
+        }
+
+        function moveUp() {
+            if (navState.type === 'clear') {
+                // move to bottom of selected column
+                const col = lastColumnWhileClear || navState.col;
+                const rows = grid[col];
+                if (!rows || rows.length === 0) return;
+                navState.type = 'cell';
+                navState.col = col;
+                navState.row = rows[rows.length-1];
+                applyVisualSelection();
+                return;
+            }
+            const rows = grid[navState.col] || [];
+            if (!rows || rows.length === 0) return;
+            const idx = rows.indexOf(navState.row);
+            if (idx > 0) {
+                navState.row = rows[idx-1];
+                applyVisualSelection();
+                return;
+            }
+            // moving off the top -> select clear and remember column
+            if (clearEl) {
+                lastColumnWhileClear = navState.col;
+                navState.type = 'clear'; navState.row = null; navState.col = lastColumnWhileClear;
+                applyVisualSelection();
+            }
+        }
+
+        function moveDown() {
+            if (navState.type === 'clear') {
+                // move to top of selected column
+                const col = lastColumnWhileClear || navState.col;
+                const rows = grid[col];
+                if (!rows || rows.length === 0) return;
+                navState.type = 'cell';
+                navState.col = col;
+                navState.row = rows[0];
+                applyVisualSelection();
+                return;
+            }
+            const rows = grid[navState.col] || [];
+            if (!rows || rows.length === 0) return;
+            const idx = rows.indexOf(navState.row);
+            if (idx < rows.length - 1) {
+                navState.row = rows[idx+1];
+                applyVisualSelection();
+                return;
+            }
+            // moving off the bottom -> select clear and remember column
+            if (clearEl) {
+                lastColumnWhileClear = navState.col;
+                navState.type = 'clear'; navState.row = null; navState.col = lastColumnWhileClear;
+                applyVisualSelection();
+            }
+        }
+
+        // Skip keyboard nav when focus is on inputs or textarea
+        function shouldIgnoreKeydown() {
+            const tag = (document.activeElement && document.activeElement.tagName) || '';
+            return ['INPUT','TEXTAREA','SELECT'].indexOf(tag.toUpperCase()) !== -1;
+        }
+
+        document.addEventListener('keydown', (ev) => {
+            if (shouldIgnoreKeydown()) return;
+            // Only handle arrow keys
+            if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(ev.key)) return;
+            ev.preventDefault();
+            if (ev.key === 'ArrowLeft') moveLeft();
+            else if (ev.key === 'ArrowRight') moveRight();
+            else if (ev.key === 'ArrowUp') moveUp();
+            else if (ev.key === 'ArrowDown') moveDown();
+        });
+
+        // Clicking with mouse should update navState accordingly
+        document.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('.spell-slot');
+            if (!btn) return;
+            if (btn.classList.contains('clear-btn')) {
+                // When clear is clicked, switch to clear state but DO NOT
+                // overwrite the remembered column. Remembered column should
+                // reflect the last selected column of cells so Up/Down from
+                // Clear returns to that column.
+                navState.type = 'clear';
+            } else if (!btn.classList.contains('alchemy-label')) {
+                const parts = (btn.dataset.position||'').split('-').map(x=>parseInt(x,10));
+                if (parts.length>=2) {
+                    navState.type = 'cell'; navState.row = parts[0]; navState.col = parts[1]; lastColumnWhileClear = navState.col;
+                }
+            }
+            applyVisualSelection();
+        });
+
+        // Hover-to-select: only respond when the mouse moves over buttons.
+        // This intentionally does not run on page load; it only reacts to mousemove.
+        (function setupHoverToSelect() {
+            let lastHoveredBtn = null;
+            document.addEventListener('mousemove', (ev) => {
+                try {
+                    // If user is typing in an input/textarea/select, ignore hover
+                    const tag = (document.activeElement && document.activeElement.tagName) || '';
+                    if (['INPUT','TEXTAREA','SELECT'].indexOf(tag.toUpperCase()) !== -1) return;
+
+                    const btn = ev.target.closest('.spell-slot');
+                    if (!btn) {
+                        // moved off any slot; reset so next hover re-triggers
+                        lastHoveredBtn = null;
+                        return;
+                    }
+                    // Only act when the hovered element changes
+                    if (btn === lastHoveredBtn) return;
+                    lastHoveredBtn = btn;
+
+                    // Ignore non-interactable labels
+                    if (btn.classList.contains('alchemy-label')) return;
+
+                    if (btn.classList.contains('clear-btn')) {
+                        navState.type = 'clear';
+                        applyVisualSelection();
+                        return;
+                    }
+
+                    const parts = (btn.dataset.position||'').split('-').map(x=>parseInt(x,10));
+                    if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
+                        // Update nav state to this hovered cell and remember column
+                        navState.type = 'cell';
+                        navState.row = parts[0];
+                        navState.col = parts[1];
+                        lastColumnWhileClear = navState.col;
+                        applyVisualSelection();
+                    }
+                } catch (e) {
+                    // swallow hover errors
+                }
+            }, { passive: true });
+        })();
+
+        // Initialize
+        try { initSelection(); } catch(e) { console.error('initSelection', e); }
+    })();
+
     const spellGrid = document.querySelector('.spell-grid');
 
     spellGrid.addEventListener('click', (event) => {

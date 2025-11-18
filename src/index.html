@@ -23,6 +23,50 @@
             /* Color halfway between the default gray (#888) and black (#000) */
             color: #444444;
         }
+        /* Keyboard-only selected styling: keep stored `.selected` as black (defined in styles.css).
+           `.kbd-selected` is applied by keyboard navigation and should be highlighted. */
+        .spell-slot.kbd-selected {
+            transform: scale(1.08);
+            transform-origin: center;
+            z-index: 2;
+            transition: transform 140ms ease, color 120ms ease;
+            color: var(--highlight-color); /* use site highlight color for keyboard selection */
+            box-shadow: none; /* remove blue outline/shadow */
+            outline: none; /* remove default focus outline */
+        }
+
+        /* Ensure keyboard-highlight overrides the first-empty gray color */
+        .spell-slot.first-empty.kbd-selected {
+            color: var(--highlight-color);
+        }
+
+        /* Keep background color matching original row colors */
+        .spell-slot.selected[data-position^="1-"],
+        .spell-slot.kbd-selected[data-position^="1-"],
+        .spell-slot.selected[data-position^="3-"],
+        .spell-slot.kbd-selected[data-position^="3-"],
+        .spell-slot.selected[data-position^="5-"],
+        .spell-slot.kbd-selected[data-position^="5-"] {
+            background-color: white;
+        }
+
+        .spell-slot.selected[data-position^="2-"],
+        .spell-slot.kbd-selected[data-position^="2-"],
+        .spell-slot.selected[data-position^="4-"],
+        .spell-slot.kbd-selected[data-position^="4-"],
+        .spell-slot.selected[data-position^="6-"],
+        .spell-slot.kbd-selected[data-position^="6-"],
+        .spell-slot.selected.clear-btn,
+        .spell-slot.kbd-selected.clear-btn {
+            background-color: #f0f0f0; /* gray rows */
+        }
+
+        /* Remove default focus outline for selected items specifically */
+        .spell-slot.selected:focus,
+        .spell-slot.kbd-selected:focus {
+            outline: none;
+            box-shadow: none;
+        }
     </style>
 
     <script>
