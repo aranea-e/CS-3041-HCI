@@ -111,13 +111,38 @@
             }
         })();
     </script>
+
+        <script>
+            // If arrived with ?clearAll=1 from index, clear the user's working
+            // build before the page scripts (main.js) run. This emulates pressing
+            // the Clear button on the selection page.
+            (function(){
+                try {
+                    var params = new URLSearchParams(window.location.search);
+                    if (params.get('clearAll')) {
+                        try { localStorage.removeItem('spells'); } catch(e){}
+                        try { localStorage.removeItem('spellOptions'); } catch(e){}
+                        try { sessionStorage.removeItem('spells'); } catch(e){}
+                        try { sessionStorage.removeItem('spellOptions'); } catch(e){}
+                        // Remove query param so reload doesn't keep clearing
+                        try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch(e){}
+                    }
+                } catch (e) {
+                    // swallow
+                }
+            })();
+        </script>
 </head>
 
 <body class="js-initial-hide">
     <nav class="top-nav">
         <a class="nav-btn" href="spelllist.html">Spell List</a>
+        <a class="nav-btn" href="index.html" style="margin-left:auto;">Restart</a>
     </nav>
-    <div class="spell-grid">
+
+    <div class="page-layout">
+        <div class="main-col">
+            <div class="spell-grid">
         <button class="spell-slot" data-position="1-1">Select Spell</button>
         <button class="spell-slot" data-position="1-2">Select Spell</button>
         <button class="spell-slot" data-position="1-3">Select Spell</button>
@@ -140,7 +165,159 @@
     <div id="alchemy-points" class="spell-slot alchemy-label" data-position="7-3">Alchemy Points: 0</div>
     <!-- Clear button moved down to bottom-right (8-3) -->
     <button class="spell-slot clear-btn" data-position="8-3">Clear</button>
+        </div>
+        </div>
+
+        <aside class="small-build">
+            <h3 style="margin-top:0;margin-bottom:0.5rem;">Target Build:</h3>
+            <div class="small-replica" id="small-replica" aria-hidden="true" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
+                <div class="spell-slot" data-replica="true" data-position="1-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="1-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="1-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="2-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="2-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="2-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="3-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="3-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="3-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="4-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="4-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="4-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="5-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="5-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="5-3">—</div>
+
+                <div></div>
+                <div class="spell-slot middle-extra" data-replica="true" data-position="6-2">—</div>
+                <div></div>
+            </div>
+            <div style="margin-top:0.6rem;font-size:0.85rem;color:#666;">Replicate this build.<br><br>Click on a spell in the grid to the left to edit.<br><br>You may also navigate with the arrow keys and enter.</div>
+        </aside>
     </div>
+
     <script src="../js/main.js"></script>
+
+    <script>
+        // Render the last stored build (try localStorage then sessionStorage)
+        (function(){
+            // Read the read-only target build map for display in the small replica.
+            // Only use `targetSpells` so the displayed target never changes due
+            // to user edits. Do not fall back to the editable `spells` key.
+            function readSpellsMap(){
+                try{
+                    var t = localStorage.getItem('targetSpells');
+                    if (t) return JSON.parse(t);
+                } catch(e){}
+                try{
+                    var s = sessionStorage.getItem('targetSpells');
+                    if (s) return JSON.parse(s);
+                } catch(e){}
+                return {};
+            }
+
+            document.addEventListener('DOMContentLoaded', function(){
+                var rawLocal = null;
+                try{ rawLocal = localStorage.getItem('spells'); } catch(e){}
+                var rawSession = null;
+                try{ rawSession = sessionStorage.getItem('spells'); } catch(e){}
+
+                console.debug('small-replica: localStorage.spells=', rawLocal, ' sessionStorage.spells=', rawSession);
+
+                var map = readSpellsMap() || {};
+                var slots = document.querySelectorAll('#small-replica .spell-slot');
+                if(!slots || slots.length===0) return;
+                // Helper to normalize labels for comparison
+                function normalizeLabel(lbl){
+                    if (!lbl) return '';
+                    var t = String(lbl).trim();
+                    if (t === '—' || t.toLowerCase() === 'select spell' || t === '') return '';
+                    return t;
+                }
+
+                slots.forEach(function(s){
+                    var pos = s.dataset.position;
+                    if(!pos) return;
+
+                    // Determine target label from stored targetSpells map
+                    var targetLabel = map && map[pos] ? String(map[pos]) : null;
+
+                    if (targetLabel) {
+                        s.textContent = targetLabel;
+                        s.classList.add('selected');
+                    } else {
+                        s.textContent = '—';
+                        s.classList.remove('selected');
+                        s.classList.remove('mismatch');
+                        return;
+                    }
+
+                    // Compare against the interactive slot (user's current build)
+                    // Interactive slots live in the main grid and do NOT have data-replica
+                    try {
+                        var interactive = document.querySelector(`.spell-slot[data-position="${pos}"]:not([data-replica])`);
+                        var interactiveLabel = interactive ? String(interactive.textContent).trim() : null;
+
+                        var normTarget = normalizeLabel(targetLabel);
+                        var normInteractive = normalizeLabel(interactiveLabel);
+
+                        if (normTarget === '' && normInteractive === '') {
+                            // both empty -> no mismatch
+                            s.classList.remove('mismatch');
+                        } else if (normTarget === normInteractive) {
+                            s.classList.remove('mismatch');
+                        } else {
+                            s.classList.add('mismatch');
+                        }
+                    } catch (e) {
+                        // On any error, be conservative and remove mismatch
+                        s.classList.remove('mismatch');
+                    }
+                });
+
+                // After marking mismatches, if there is a target present and no
+                // mismatches remain, redirect to the end page.
+                try {
+                    var hasTarget = false;
+                    Object.keys(map || {}).forEach(function(p){
+                        if (normalizeLabel(map[p]) !== '') hasTarget = true;
+                    });
+
+                    var mismatches = document.querySelectorAll('#small-replica .spell-slot.mismatch');
+                    if (hasTarget && (!mismatches || mismatches.length === 0)) {
+                        // Compute average selection time (ms) and store it, then redirect.
+                        try {
+                            // Prefer sessionStorage for start/count when available (works better
+                            // for file:// in some browsers), fall back to localStorage.
+                            var startS = parseInt(sessionStorage.getItem('startTime') || '0', 10) || 0;
+                            var startL = parseInt(localStorage.getItem('startTime') || '0', 10) || 0;
+                            var start = startS || startL || 0;
+
+                            var countS = parseInt(sessionStorage.getItem('selectionCount') || '0', 10) || 0;
+                            var countL = parseInt(localStorage.getItem('selectionCount') || '0', 10) || 0;
+                            var count = Math.max(countS, countL) || 0;
+
+                            var totalMs = 0;
+                            if (start > 0) totalMs = Date.now() - start;
+                            var avgMs = 0;
+                            if (count > 0) avgMs = Math.round(totalMs / count);
+                            else avgMs = totalMs || 0;
+                            try { localStorage.setItem('avgSelectionTimeMs', String(avgMs)); } catch(e){}
+                            try { sessionStorage.setItem('avgSelectionTimeMs', String(avgMs)); } catch(e){}
+                        } catch (e) {
+                            // ignore
+                        }
+                        // Small delay to allow any pending visual updates
+                        setTimeout(function(){ window.location.href = 'end.html'; }, 60);
+                    }
+                } catch (e) {
+                    // ignore redirect errors
+                }
+            }, {once:true});
+        })();
+    </script>
 </body>
 </html>

@@ -6,8 +6,9 @@
   <title>Spellbook Creator Task</title>
   <link rel="stylesheet" href="../css/styles.css" />
   <style>
-    .hf-container{max-width:760px;margin:4rem auto;padding:1.25rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
-    .hf-cta{display:inline-block;margin-top:1rem}
+    /* Reduce top margin so content fits without vertical scrolling */
+    .hf-container{max-width:760px;margin:1.25rem auto;padding:1rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
+    .hf-cta{display:inline-block;margin-top:0.5rem}
     .hf-cta button{padding:0.6rem 1rem;font-size:1rem}
     /* Replica grid visuals - non-interactable */
     .replica-grid .spell-slot{border:1px solid #ddd;padding:0.5rem;border-radius:6px;background:#fff;text-align:center;font-size:0.95rem}
@@ -18,7 +19,7 @@
 </head>
 <body>
   <main class="hf-container">
-    <div class="index-columns" style="display:grid; grid-template-columns:1fr 360px; gap:1.25rem; align-items:start;">
+    <div class="index-columns" style="display:grid; grid-template-columns:1fr 360px; gap:0.75rem; align-items:start;">
       <section class="left-col">
         <h1>Spellbook Creator Task</h1>
 
@@ -36,7 +37,7 @@
         </ul>
 
         <div class="hf-cta">
-          <a href="spelllist.html"><button type="button">Start</button></a>
+          <a href="spelllist.html?clearAll=1" onclick="try{ /* clear previous metrics */ localStorage.removeItem('startTime'); sessionStorage.removeItem('startTime'); localStorage.removeItem('selectionCount'); sessionStorage.removeItem('selectionCount'); localStorage.removeItem('avgSelectionTimeMs'); sessionStorage.removeItem('avgSelectionTimeMs'); /* initialize new run */ var t = String(Date.now()); try{ localStorage.setItem('startTime', t); }catch(e){} try{ sessionStorage.setItem('startTime', t); }catch(e){} try{ localStorage.setItem('selectionCount','0'); }catch(e){} try{ sessionStorage.setItem('selectionCount','0'); }catch(e){} }catch(e){}"><button type="button">Start</button></a>
         </div>
       </section>
 
@@ -139,6 +140,8 @@
           return pool[Math.floor(Math.random() * pool.length)];
         }
 
+        // Always generate a fresh replica on load. Do not reuse stored map
+        // when rendering the replica grid so each visit shows a new random build.
         slots.forEach(s => {
           const pos = s.dataset.position;
           // derive the row number from data-position like "3-2"
@@ -149,14 +152,32 @@
             if (!Number.isNaN(r)) row = r;
           } catch (e) { row = circle; }
 
-          if (map && map[pos]) {
-            s.textContent = map[pos];
-            s.classList.add('selected');
-          } else {
-            s.textContent = pickForSlotRow(row);
-            s.classList.add('selected');
-          }
+          s.textContent = pickForSlotRow(row);
+          s.classList.add('selected');
         });
+
+        // Persist the current replica into localStorage so other pages can
+        // show the "last generated build". We save all positions present
+        // in the replica grid (including ones populated from stored map).
+        try {
+          const saveMap = {};
+          slots.forEach(s => {
+            const p = s.dataset.position;
+            if (p) saveMap[p] = s.textContent;
+          });
+          // Persist in both localStorage and sessionStorage so navigation
+          // from index -> spelllist (file:// and some browser configs)
+          // can access the generated build.
+          try { localStorage.setItem('spells', JSON.stringify(saveMap)); } catch (e) {}
+          try { sessionStorage.setItem('spells', JSON.stringify(saveMap)); } catch (e) {}
+          // Also persist a read-only copy of the generated target so other
+          // pages can display the target build without being affected by
+          // the user's editing actions. Use `targetSpells` as the key.
+          try { localStorage.setItem('targetSpells', JSON.stringify(saveMap)); } catch (e) {}
+          try { sessionStorage.setItem('targetSpells', JSON.stringify(saveMap)); } catch (e) {}
+        } catch (e) {
+          // ignore storage errors
+        }
       });
     })();
   </script>

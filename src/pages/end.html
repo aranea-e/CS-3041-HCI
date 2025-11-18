@@ -16,11 +16,42 @@
     <h1>Metrics</h1>
     <p>Accumulated CSV of all local runs.</p>
 
+    <div>
+      <p><strong>Average selection time:</strong> <span id="avg-time">—</span> ms</p>
+      <p><strong>Total selections:</strong> <span id="total-selections">—</span></p>
+      <p><strong>Total time:</strong> <span id="total-ms">—</span> ms</p>
+    </div>
+
     <div class="hf-cta">
       <a href="index.html"><button type="button">Run again</button></a>
     </div>
   </main>
 
   <script src="../js/main.js"></script>
+  <script>
+    (function(){
+      try {
+        // Prefer sessionStorage (works better for file:// in some browsers)
+        var avg = sessionStorage.getItem('avgSelectionTimeMs');
+        if (avg === null) avg = localStorage.getItem('avgSelectionTimeMs');
+
+        var count = sessionStorage.getItem('selectionCount');
+        if (count === null) count = localStorage.getItem('selectionCount');
+
+        var start = sessionStorage.getItem('startTime');
+        if (start === null) start = localStorage.getItem('startTime');
+
+        var total = '';
+        if (start) {
+          var s = parseInt(start,10) || 0;
+          if (s) total = String(Date.now() - s);
+        }
+
+        document.getElementById('avg-time').textContent = (avg !== null && avg !== undefined) ? String(avg) : '—';
+        document.getElementById('total-selections').textContent = (count !== null && count !== undefined) ? String(count) : '—';
+        document.getElementById('total-ms').textContent = total !== '' ? total : '—';
+      } catch (e) {}
+    })();
+  </script>
 </body>
 </html>

@@ -93,6 +93,26 @@ document.addEventListener('DOMContentLoaded', () => {
             map[posParam] = decodedSpell;
             writeSpellsMap(map);
 
+            // Count this as a user selection for timing metrics
+            try {
+                // Prefer sessionStorage value (per-run) when available; otherwise fall
+                // back to localStorage. This ensures Start's sessionStorage reset
+                // is used and we don't resume from an old localStorage value.
+                var prevSraw = sessionStorage.getItem('selectionCount');
+                var prevLraw = localStorage.getItem('selectionCount');
+                var prev = 0;
+                if (prevSraw !== null && prevSraw !== undefined) {
+                    prev = parseInt(prevSraw || '0', 10) || 0;
+                } else if (prevLraw !== null && prevLraw !== undefined) {
+                    prev = parseInt(prevLraw || '0', 10) || 0;
+                }
+                var next = String(prev + 1);
+                try { localStorage.setItem('selectionCount', next); } catch(e){}
+                try { sessionStorage.setItem('selectionCount', next); } catch(e){}
+            } catch (e) {
+                // ignore storage errors
+            }
+
             // Remove query params from the URL so reload won't reapply
             try {
                 history.replaceState(null, '', window.location.pathname);
@@ -109,7 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const map = readSpellsMap();
         Object.keys(map).forEach(pos => {
             const label = map[pos];
-            const target = document.querySelector(`.spell-slot[data-position="${pos}"]`);
+            // Only rehydrate interactive slots — never touch display-only replicas
+            const target = document.querySelector(`.spell-slot[data-position="${pos}"]:not([data-replica])`);
             if (target) {
                 target.textContent = label;
                 target.classList.add('selected');
@@ -119,8 +140,9 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const params = new URLSearchParams(window.location.search);
             const clearedPos = params.get('clearedPos');
-            if (clearedPos) {
-                const target = document.querySelector(`.spell-slot[data-position="${clearedPos}"]`);
+                if (clearedPos) {
+                // Ensure we only clear the interactive slot, not any replica display
+                const target = document.querySelector(`.spell-slot[data-position="${clearedPos}"]:not([data-replica])`);
                 if (target) {
                     target.textContent = 'Select Spell';
                     target.classList.remove('selected');
@@ -423,6 +445,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', (ev) => {
             const btn = ev.target.closest('.spell-slot');
             if (!btn) return;
+            // ignore replica (display-only) slots
+            if (btn.dataset && btn.dataset.replica) return;
             if (btn.classList.contains('clear-btn')) {
                 // When clear is clicked, switch to clear state but DO NOT
                 // overwrite the remembered column. Remembered column should
@@ -454,6 +478,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         lastHoveredBtn = null;
                         return;
                     }
+                    // ignore replica (display-only) slots
+                    if (btn.dataset && btn.dataset.replica) { lastHoveredBtn = null; return; }
                     // Only act when the hovered element changes
                     if (btn === lastHoveredBtn) return;
                     lastHoveredBtn = btn;
@@ -491,6 +517,8 @@ document.addEventListener('DOMContentLoaded', () => {
     spellGrid.addEventListener('click', (event) => {
         const button = event.target.closest('.spell-slot');
         if (!button) return;
+        // ignore clicks on the small replica
+        if (button.dataset && button.dataset.replica) return;
 
         const position = button.dataset.position;
         // Clear button handling: if clear button clicked, wipe stored spells and rehydrate UI

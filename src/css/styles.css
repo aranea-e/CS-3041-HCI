@@ -53,6 +53,63 @@ body {
     opacity: 0.95;
 }
 
+/* Page-level two-column layout used on spelllist to show a small build */
+.page-layout {
+    display: grid;
+    grid-template-columns: 1fr 260px;
+    gap: 1rem;
+    align-items: start;
+    width: 92%;
+    max-width: 1180px;
+    box-sizing: border-box;
+    margin-top: 0.5rem;
+}
+
+.main-col { }
+
+.small-build {
+    background: transparent;
+    padding: 0.6rem;
+    box-sizing: border-box;
+}
+
+.small-replica .spell-slot {
+    padding: 0.45rem;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background: #fff;
+    color: #666;
+    /* Reduce font-size by 2pt compared to the previous size */
+    font-size: calc(0.75rem - 2pt);
+    text-align: center;
+    min-height: 32px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    /* Make these display-only: not interactive and not selectable */
+    pointer-events: none;
+    user-select: none;
+    cursor: default;
+}
+
+.small-replica .spell-slot.selected {
+    color: #111;
+    font-weight:700;
+    font-style:normal;
+}
+
+/* Mark replica slots red when they don't match the user's current build */
+.small-replica .spell-slot.mismatch {
+    border-color: #d9534f; /* bootstrap danger red */
+    color: #d9534f;
+    background-color: #fff7f7;
+}
+
+@media (max-width: 900px) {
+    .page-layout { grid-template-columns: 1fr; }
+    .small-build { order: 2; }
+}
+
 /* Nav button highlight color */
 .top-nav .nav-btn:hover,
 .top-nav .nav-btn:focus,
