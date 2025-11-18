@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spellbook Creator Task</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <style>
+    .hf-container{max-width:760px;margin:4rem auto;padding:1.25rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
+    .hf-cta{display:inline-block;margin-top:1rem}
+    .hf-cta button{padding:0.6rem 1rem;font-size:1rem}
+    /* Replica grid visuals - non-interactable */
+    .replica-grid .spell-slot{border:1px solid #ddd;padding:0.5rem;border-radius:6px;background:#fff;text-align:center;font-size:0.95rem}
+    .replica-grid .spell-slot.selected{background:#f6f6f6}
+    /* ensure replica does not receive pointer events or text selection */
+    .replica-grid .spell-slot{pointer-events:none;user-select:none}
+  </style>
+</head>
+<body>
+  <main class="hf-container">
+    <div class="index-columns" style="display:grid; grid-template-columns:1fr 360px; gap:1.25rem; align-items:start;">
+      <section class="left-col">
+        <h1>Spellbook Creator Task</h1>
+
+        <p>
+          You will attempt to replicate a given spellbook. Your interaction time and usage
+          of keyboard or search bar options will be recorded locally for usability metrics.
+        </p>
+
+        <ul>
+          <li>Click on a spell slot to choose a spell for that slot</li>
+          <li>Click on an option to add it to that slot</li>
+          <li>A search bar is provided on the spell list to narrow down options</li>
+          <li>You may also use the keyboard to navigate the UI</li>
+          <li>When the spellbook matches the one you are trying to recreate, your data will be recorded and you will be redirected</li>
+        </ul>
+
+        <div class="hf-cta">
+          <a href="spelllist.html"><button type="button">Start</button></a>
+        </div>
+      </section>
+
+      <aside class="right-col">
+        <h2 style="margin-top:0;">Replica</h2>
+        <div class="replica-grid" aria-hidden="true" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
+          <!-- Rows 1..5: three columns each -->
+          <div class="spell-slot" data-replica="true" data-position="1-1">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="1-2">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="1-3">Select Spell</div>
+
+          <div class="spell-slot" data-replica="true" data-position="2-1">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="2-2">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="2-3">Select Spell</div>
+
+          <div class="spell-slot" data-replica="true" data-position="3-1">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="3-2">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="3-3">Select Spell</div>
+
+          <div class="spell-slot" data-replica="true" data-position="4-1">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="4-2">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="4-3">Select Spell</div>
+
+          <div class="spell-slot" data-replica="true" data-position="5-1">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="5-2">Select Spell</div>
+          <div class="spell-slot" data-replica="true" data-position="5-3">Select Spell</div>
+
+          <!-- Row 6: only middle slot -->
+          <div></div>
+          <div class="spell-slot middle-extra" data-replica="true" data-position="6-2">Select Spell</div>
+          <div></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script src="../js/main.js"></script>
+  <script>
+    // Populate replica grid with random circle-appropriate spells on load.
+    (function(){
+      // circle label lists (kept in sync with selection page)
+      const circleLabels = {
+        1: [
+          'Cure Disease','Detect Magic','Disrupt Light','Fighter’s Intuition','Gentle Repose','Ghost Blade','Heartiness','Identify','Immunity to Poison','Implement','Light','Mentor','Pas','Protect Item','Protection from Boulder','Repair Armor','Speak','Speak with Dead','Strange Brew','Transmute Weapon','Zombie Walk'
+        ],
+        2: ['Aura of Protection','Death Watch','Deep Pockets','Disenchant','Dream','Enchant Weapon','Group Healing','Guidance','Heal Limb','Protect the Soul','Protection from Missile','Reanimate Limb','Repair Item','Ward: Undead'],
+        3: ['Animate Lesser Undead','Beckon Corpse','Cantrip','Commune with Spirit','Disease Weapon','Enfeeble Being','Feign Death','Foretell','Fortune Tell','Merge','Precognition','Purity','Raise Dead','Skew Divination','Soul Bane'],
+        4: ['Animal Companion','Animate Undead','Armored Cloak','Call the Soul','Circle of Protection','Combat Raise Dead','Create Poison','Death Wish','Disrupt','Divine Aid','Enchant Armor','Find the Path','Magic Missile','Mystic Forge','Séance','Shapeshifting'],
+        5: ['Animate Undead General','Armor-Piercing Weapon','Circle of Healing','Familiar','Reforge','Regenerate the Soul','Regeneration','Resist Magic','Vision','Ward: Enchanted Beings'],
+        6: ['Assassin’s Blade','Cry of Life','Embrace Death','Intervention','Lightning Bolt','Masterwork Hammer','Prophecy','Resist Death','Ritual of Banishment','Second Chance','Seed of Life','Transformation']
+      };
+
+      function readSpellsMap(){ try{ const r = localStorage.getItem('spells'); return r?JSON.parse(r):{} }catch(e){return{}} }
+
+      function getCircleFromContext(){
+        try{
+          const params = new URLSearchParams(window.location.search);
+          let pos = params.get('pos');
+          if(!pos) pos = localStorage.getItem('selectedPosition');
+          if(pos) return parseInt(String(pos).split('-')[0],10) || 1;
+        }catch(e){}
+        return 1;
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const map = readSpellsMap();
+        const circle = getCircleFromContext() || 1;
+        const slots = Array.from(document.querySelectorAll('.replica-grid .spell-slot'));
+
+        function chooseCircleForRow(maxCircle) {
+          // Iterative weighted choice: try highest first with 90% chance,
+          // otherwise continue to next lower with 90% of remaining, etc.
+          // maxCircle is the highest allowed circle (row number).
+          const top = Math.max(1, Math.min(6, Math.floor(maxCircle)));
+          for (let c = top; c > 1; c--) {
+            if (Math.random() < 0.9) return c;
+            // else continue to next lower
+          }
+          return 1;
+        }
+
+        function pickForSlotRow(row) {
+          // 10% chance to show a special label before choosing a spell.
+          // If hit, 50/50 choose Alchemy (show points) or Regional.
+          if (Math.random() < 0.10) {
+            if (Math.random() < 0.5) {
+              // Alchemy: use the slot's row to determine points (clamp 1..6)
+              const r = Math.max(1, Math.min(6, Math.floor(row)));
+              const alchemyMap = {1:1,2:2,3:4,4:6,5:8,6:12};
+              const pts = alchemyMap[r] || 0;
+              return `Alchemy (${pts})`;
+            } else {
+              return 'Regional';
+            }
+          }
+
+          const chosenCircle = chooseCircleForRow(row);
+          const pool = circleLabels[chosenCircle] || [];
+          if (!pool || !pool.length) return '—';
+          return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        slots.forEach(s => {
+          const pos = s.dataset.position;
+          // derive the row number from data-position like "3-2"
+          let row = 1;
+          try {
+            const p = String(pos || '').split('-')[0];
+            const r = parseInt(p, 10);
+            if (!Number.isNaN(r)) row = r;
+          } catch (e) { row = circle; }
+
+          if (map && map[pos]) {
+            s.textContent = map[pos];
+            s.classList.add('selected');
+          } else {
+            s.textContent = pickForSlotRow(row);
+            s.classList.add('selected');
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

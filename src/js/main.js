@@ -20,11 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mark the first empty slot by iterating columns first.
     function markFirstEmptySlot() {
         try {
-            // Clear any previous marking
-            document.querySelectorAll('.spell-slot.first-empty').forEach(el => el.classList.remove('first-empty'));
+            // Clear any previous marking (ignore replica slots)
+            document.querySelectorAll('.spell-slot.first-empty:not([data-replica])').forEach(el => el.classList.remove('first-empty'));
 
-            // Gather all positions present in the DOM to determine grid bounds
-            const slots = Array.from(document.querySelectorAll('.spell-slot'))
+            // Gather all positions present in the DOM to determine grid bounds (ignore replica slots)
+            const slots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])'))
                 .filter(s => !s.classList.contains('clear-btn') && !s.classList.contains('alchemy-label'));
 
             let maxRow = 0, maxCol = 0;
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let row = 1; row <= maxRow && !marked; row++) {
                     const key = `${row}-${col}`;
                     if (!positions.has(key)) continue; // position not present in DOM
-                    const el = document.querySelector(`.spell-slot[data-position="${key}"]`);
+                    const el = document.querySelector(`.spell-slot[data-position="${key}"]:not([data-replica])`);
                     if (!el) continue;
                     // Skip non-interactable labels and clear button
                     if (el.classList.contains('clear-btn') || el.classList.contains('alchemy-label')) continue;
@@ -184,9 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Keyboard navigation implementation ---
     (function setupKeyboardNavigation() {
         // Build grid model from DOM
-        const allSlots = Array.from(document.querySelectorAll('.spell-slot'));
-        const clearEl = document.querySelector('.spell-slot.clear-btn');
-        const alchemyEl = document.querySelector('.spell-slot.alchemy-label');
+        const allSlots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])'));
+        const clearEl = document.querySelector('.spell-slot.clear-btn:not([data-replica])');
+        const alchemyEl = document.querySelector('.spell-slot.alchemy-label:not([data-replica])');
 
         const grid = {}; // grid[col] = sorted array of rows
         let minCol = Infinity, maxCol = -Infinity;
@@ -220,7 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Helper to get element for a given row/col
         function elFor(row, col) {
-            return document.querySelector(`.spell-slot[data-position="${row}-${col}"]`);
+            return document.querySelector(`.spell-slot[data-position="${row}-${col}"]:not([data-replica])`);
         }
 
         // Find closest row in column to targetRow
@@ -246,7 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // fall back to top-left (smallest col, smallest row available).
         function initSelection() {
             try {
-                const fe = document.querySelector('.spell-slot.first-empty');
+                const fe = document.querySelector('.spell-slot.first-empty:not([data-replica])');
                 if (fe && fe.dataset && fe.dataset.position) {
                     const parts = fe.dataset.position.split('-').map(x=>parseInt(x,10));
                     if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function applyVisualSelection() {
             // Remove previous markers
-            document.querySelectorAll('.spell-slot.kbd-selected').forEach(s => s.classList.remove('kbd-selected'));
+            document.querySelectorAll('.spell-slot.kbd-selected:not([data-replica])').forEach(s => s.classList.remove('kbd-selected'));
             if (navState.type === 'cell') {
                 const el = elFor(navState.row, navState.col);
                 if (el) {
@@ -515,8 +515,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // ignore
             }
 
-            // Reset all spell-slot texts to default
-            document.querySelectorAll('.spell-slot').forEach(slot => {
+            // Reset all interactive spell-slot texts to default (leave replica alone)
+            document.querySelectorAll('.spell-slot:not([data-replica])').forEach(slot => {
                 // keep the clear button label as 'Clear' and skip the alchemy label
                 if (slot.classList.contains('clear-btn')) return;
                 if (slot.classList.contains('alchemy-label')) return;
