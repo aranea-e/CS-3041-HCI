@@ -152,6 +152,29 @@
             width: auto;
             align-self: flex-start;
         }
+        /* Keyboard selection styling (match the green used for switches) */
+        .kbd-selected {
+            color: #18bca8 !important;
+        }
+        /* Ensure selected buttons still show usual button layout but with green text */
+        .circle-btn.kbd-selected {
+            color: #18bca8 !important;
+        }
+        /* When the switches' container has .kbd-selected, color the label text */
+        .buydowns-switch.kbd-selected span,
+        .alternatives-switch.kbd-selected span {
+            color: #18bca8 !important;
+        }
+        /* Remove the browser focus outline/box-shadow for our interactive items
+           so selection is shown only via the green color. We still keep elements
+           keyboard-focusable for accessibility but suppress the default ring. */
+        .circle-btn:focus,
+        #search-input:focus,
+        .buydowns-switch input:focus,
+        .alternatives-switch input:focus {
+            outline: none !important;
+            box-shadow: none !important;
+        }
     </style>
 </head>
 <body>
@@ -433,6 +456,185 @@
                     // ignore
                 }
             }
+
+                    // --- Keyboard navigation for left column (3x3 wrapped grid) ---
+                    (function() {
+                        const searchInput = document.getElementById('search-input');
+                        const noSpellBtn = document.getElementById('no-spell-btn');
+                        const topBuydowns = document.querySelector('.top-row .buydowns-switch');
+                        const buydownsToggle = document.getElementById('buydowns-toggle');
+                        const regionalBtn = document.getElementById('regional-btn');
+                        const alchemyBtn = document.getElementById('alchemy-btn');
+                        const alternativesContainer = document.querySelector('.alternatives-switch');
+                        const alternativesToggle = document.getElementById('alternatives-toggle');
+
+                        // current grid position (row, col). Start at (0,0)
+                        let cur = {r:0, c:0};
+                        // last movement direction used to resolve (1,1) behavior
+                        let lastDir = null; // 'vertical' or 'horizontal'
+
+                        function mod3(n) { return ((n % 3) + 3) % 3; }
+
+                        function normalizeCoord(prev, attempted, dir) {
+                            const r = mod3(attempted.r);
+                            const c = mod3(attempted.c);
+
+                            // Row 0: anything on row 0 maps to (0,0) (selection bar)
+                            if (r === 0) return {r:0,c:0};
+
+                            // Row 1 rules
+                            if (r === 1) {
+                                if (c === 0) return {r:1,c:0}; // No Spell
+                                if (c === 1) {
+                                    // (1,1) special handling
+                                    if (dir === 'vertical') return {r:1,c:0};
+                                    // horizontal: skip cell. When moving from No Spell (c===0)
+                                    // to the right, normally we skip to Buydowns (c===2). But
+                                    // if the Buydowns control is not present/visible we should
+                                    // remain on No Spell.
+                                    if (prev && prev.c === 0) {
+                                        if (!topBuydowns || topBuydowns.style.display === 'none') return {r:1,c:0};
+                                        return {r:1,c:2};
+                                    }
+                                    if (prev && prev.c === 2) return {r:1,c:0};
+                                    return {r:1,c:0};
+                                }
+                                if (c === 2) {
+                                    // Buydowns switch may not be present
+                                    if (!topBuydowns || topBuydowns.style.display === 'none') return {r:1,c:0};
+                                    return {r:1,c:2};
+                                }
+                            }
+
+                            // Row 2 rules
+                            if (r === 2) {
+                                // If Alternatives is turned off, regional & alchemy redirect to alternatives
+                                const altOn = !!(alternativesToggle && alternativesToggle.checked);
+                                if (c === 2) return {r:2,c:2};
+                                if (!altOn) return {r:2,c:2};
+                                // altOn true: map normally
+                                if (c === 0) return {r:2,c:0};
+                                if (c === 1) return {r:2,c:1};
+                            }
+
+                            // fallback
+                            return {r:0,c:0};
+                        }
+
+                        function elementForCoord(coord) {
+                            const {r,c} = coord;
+                            if (r === 0) return searchInput;
+                            if (r === 1) {
+                                if (c === 0) return noSpellBtn;
+                                if (c === 2) return topBuydowns || noSpellBtn;
+                                // c===1 should not be reached because normalizeCoord handles it
+                                return noSpellBtn;
+                            }
+                            if (r === 2) {
+                                if (c === 2) return alternativesContainer;
+                                if (c === 0) return regionalBtn;
+                                if (c === 1) return alchemyBtn;
+                            }
+                            return null;
+                        }
+
+                        function clearSelectionVisuals() {
+                            document.querySelectorAll('.kbd-selected').forEach(el => el.classList.remove('kbd-selected'));
+                        }
+
+                        function applySelectionVisual(el) {
+                            if (!el) return;
+                            // For switch containers, add class to container so label spans get colored
+                            if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) {
+                                el.classList.add('kbd-selected');
+                                // also visually focus the inner input (but don't open keyboard focus for input)
+                            } else if (el.tagName === 'INPUT') {
+                                el.classList.add('kbd-selected');
+                            } else if (el.classList && el.classList.contains('circle-btn')) {
+                                el.classList.add('kbd-selected');
+                            }
+                        }
+
+                        function focusCoord(coord) {
+                            const el = elementForCoord(coord);
+                            if (!el) return;
+                            clearSelectionVisuals();
+                            applySelectionVisual(el);
+                            // Blur any previously focused element so its native focus styling
+                            // (blue outline) is removed immediately when we change selection.
+                            try {
+                                const prev = document.activeElement;
+                                if (prev && prev !== document.body && typeof prev.blur === 'function') prev.blur();
+                            } catch (e) {}
+                            // Focus where sensible: inputs and buttons
+                            try {
+                                if (el.tagName === 'INPUT') el.focus();
+                                else if (el.classList && el.classList.contains('circle-btn')) el.focus();
+                                else if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) {
+                                    // focus the internal checkbox for aria/focus
+                                    const input = el.querySelector('input');
+                                    if (input) input.focus();
+                                }
+                            } catch (e) {}
+                        }
+
+                        // Initialize visual selection at (0,0)
+                        focusCoord(cur);
+
+                        // Handle key navigation
+                        document.addEventListener('keydown', (ev) => {
+                            const arrows = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+                            if (!arrows.includes(ev.key)) return;
+                            ev.preventDefault();
+
+                            let attempted = {r:cur.r, c:cur.c};
+                            let dir = null;
+                            if (ev.key === 'ArrowUp') { attempted.r = mod3(cur.r - 1); dir = 'vertical'; }
+                            if (ev.key === 'ArrowDown') { attempted.r = mod3(cur.r + 1); dir = 'vertical'; }
+                            if (ev.key === 'ArrowLeft') { attempted.c = mod3(cur.c - 1); dir = 'horizontal'; }
+                            if (ev.key === 'ArrowRight') { attempted.c = mod3(cur.c + 1); dir = 'horizontal'; }
+
+                            const final = normalizeCoord(cur, attempted, dir);
+                            lastDir = dir;
+                            cur = final;
+                            focusCoord(cur);
+                        });
+
+                        // Activation via Enter/Space
+                        document.addEventListener('keydown', (ev) => {
+                            if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                            const el = elementForCoord(cur);
+                            if (!el) return;
+                            ev.preventDefault();
+                            // If a switch container, toggle the nested checkbox
+                            if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) {
+                                const input = el.querySelector('input');
+                                if (input) {
+                                    input.checked = !input.checked;
+                                    input.dispatchEvent(new Event('change', {bubbles:true}));
+                                }
+                                return;
+                            }
+                            // If input (search), focus
+                            if (el.tagName === 'INPUT') {
+                                el.focus();
+                                return;
+                            }
+                            // If button, click
+                            if (el.classList && el.classList.contains('circle-btn')) {
+                                try { el.click(); } catch (e) {}
+                                return;
+                            }
+                        });
+
+                    // Escape key: return to index page
+                    document.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Escape' || ev.key === 'Esc') {
+                            ev.preventDefault();
+                            window.location.href = '../index.html';
+                        }
+                    });
+                    })();
 
             // When a circle button is clicked, navigate back to index and pass the selection
             container.addEventListener('click', (ev) => {
