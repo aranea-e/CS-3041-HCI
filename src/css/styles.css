@@ -105,6 +105,27 @@ body {
     background-color: #fff7f7;
 }
 
+/* Show an X overlay for replica slots that are intentionally absent/disabled
+   to match the visual treatment used on the interactive spell list. Apply
+   to both the small-replica (spelllist page) and replica-grid (index page). */
+.small-replica .spell-slot.replica-disabled,
+.replica-grid .spell-slot.replica-disabled {
+    position: relative;
+    color: transparent !important;
+}
+.small-replica .spell-slot.replica-disabled::after,
+.replica-grid .spell-slot.replica-disabled::after {
+    content: '✕';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    color: #a00;
+    user-select: none;
+}
+
 @media (max-width: 900px) {
     .page-layout { grid-template-columns: 1fr; }
     .small-build { order: 2; }
@@ -317,4 +338,11 @@ body {
     min-height: 2.2rem; /* ~35px */
     display: flex; /* ensure flex behavior if not set inline */
     align-items: center;
+}
+
+/* Hide the live on-screen debug timer by default. Kept in the DOM for
+   diagnostics but not visible to participants. Use !important so inline
+   positioning styles do not force it to remain visible. */
+#live-timer {
+    display: none !important;
 }

@@ -9,21 +9,42 @@
     .hf-container{max-width:760px;margin:4rem auto;padding:1.25rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
     .hf-cta{display:inline-block;margin-top:1rem}
     .hf-cta button{padding:0.6rem 1rem;font-size:1rem}
+    .row-flex{display:flex;gap:1.25rem;align-items:flex-start}
+    .metrics-col{flex:1;min-width:0}
+    .csv-col{width:420px}
   </style>
 </head>
 <body>
   <main class="hf-container">
     <h1>Metrics</h1>
-    <p>Accumulated CSV of all local runs.</p>
+    <div class="row-flex">
+      <div class="metrics-col">
+        <div>
+          <p><strong>Average selection time:</strong> <span id="avg-time">—</span> ms</p>
+          <p><strong>Total selections:</strong> <span id="total-selections">—</span></p>
+          <p><strong>Total time:</strong> <span id="total-ms">—</span> ms</p>
+          <p><strong>Spellcaster info page time:</strong> <span id="cover-ms">—</span> ms</p>
+          <p><strong>Search used:</strong> <span id="search-used">—</span> / <span id="usable-count">16</span></p>
+          <p><strong>Keyboard used:</strong> <span id="keyboard-used">—</span> / <span id="usable-count-2">16</span></p>
+          <p><strong>NPS score:</strong> <span id="nps-score">—</span></p>
+        </div>
 
-    <div>
-      <p><strong>Average selection time:</strong> <span id="avg-time">—</span> ms</p>
-      <p><strong>Total selections:</strong> <span id="total-selections">—</span></p>
-      <p><strong>Total time:</strong> <span id="total-ms">—</span> ms</p>
-    </div>
+        <div class="hf-cta">
+          <a href="index.html"><button type="button">Run again</button></a>
+        </div>
+      </div>
 
-    <div class="hf-cta">
-      <a href="index.html"><button type="button">Run again</button></a>
+      <div class="csv-col">
+        <section id="runs-csv" style="margin-top:0;">
+          <h2 style="margin-bottom:0.25rem;">All Runs CSV</h2>
+          <p style="margin-top:0;margin-bottom:0.5rem;color:#666;">This CSV is formatted for analysis (columns: <code>time_on_task_ms,searches_used,keyboard_used,info_time_ms,nps</code>).</p>
+          <div style="display:flex; gap:0.5rem; align-items:center; margin-bottom:0.5rem;">
+            <button id="download-csv" type="button">Download CSV</button>
+            <button id="clear-runs" type="button">Clear Runs</button>
+          </div>
+          <textarea id="runs-csv-text" style="width:100%;height:220px;font-family:monospace;">—</textarea>
+        </section>
+      </div>
     </div>
   </main>
 
@@ -38,18 +59,295 @@
         var count = sessionStorage.getItem('selectionCount');
         if (count === null) count = localStorage.getItem('selectionCount');
 
-        var start = sessionStorage.getItem('startTime');
-        if (start === null) start = localStorage.getItem('startTime');
-
+        // Prefer a stored total (captured when redirect to survey) so the
+        // timer is considered stopped. Otherwise fall back to computing from startTime.
         var total = '';
-        if (start) {
-          var s = parseInt(start,10) || 0;
-          if (s) total = String(Date.now() - s);
-        }
+        try {
+          // Compute usable (non-X) slot count from stored targetSpells or spells.
+          (function(){
+            try {
+              function normalizeLabel(lbl){ if(!lbl) return ''; var t = String(lbl).trim(); if (t === '—' || t.toLowerCase() === 'select spell' || t === '') return ''; return t; }
+              var usable = null;
+              // Prefer targetSpells which explicitly marks absent slots with empty string
+              try {
+                var rawT = sessionStorage.getItem('targetSpells'); if (rawT === null) rawT = localStorage.getItem('targetSpells');
+                if (rawT) {
+                  var tmap = JSON.parse(rawT);
+                  if (tmap && typeof tmap === 'object') {
+                    var c = 0;
+                    Object.keys(tmap).forEach(function(p){ try { var v = tmap[p]; if (normalizeLabel(v) !== '') c++; } catch(e){} });
+                    usable = c;
+                  }
+                }
+              } catch(e) { /* ignore */ }
+
+              // If no explicit target map, fall back to counting non-empty entries in 'spells'
+              if (usable === null) {
+                try {
+                  var rawS = sessionStorage.getItem('spells'); if (rawS === null) rawS = localStorage.getItem('spells');
+                  if (rawS) {
+                    var smap = JSON.parse(rawS);
+                    if (smap && typeof smap === 'object') {
+                      var c2 = 0;
+                      Object.keys(smap).forEach(function(p){ try { var v = smap[p]; if (normalizeLabel(v) !== '') c2++; } catch(e){} });
+                      usable = c2;
+                    }
+                  }
+                } catch(e) { /* ignore */ }
+              }
+
+              if (usable === null || !(isFinite(usable) && usable >= 0)) usable = 16;
+              try { var uel = document.getElementById('usable-count'); if (uel) uel.textContent = String(usable); } catch(e){}
+              try { var uel2 = document.getElementById('usable-count-2'); if (uel2) uel2.textContent = String(usable); } catch(e){}
+            } catch(e) {}
+          })();
+          var storedTotal = sessionStorage.getItem('totalRunMs');
+          if (storedTotal === null) storedTotal = localStorage.getItem('totalRunMs');
+          if (storedTotal) {
+            total = String(storedTotal);
+          } else {
+            var start = sessionStorage.getItem('startTime');
+            if (start === null) start = localStorage.getItem('startTime');
+            if (start) {
+              var s = parseInt(start,10) || 0;
+              if (s) total = String(Date.now() - s);
+            }
+          }
+        } catch(e) {}
 
         document.getElementById('avg-time').textContent = (avg !== null && avg !== undefined) ? String(avg) : '—';
         document.getElementById('total-selections').textContent = (count !== null && count !== undefined) ? String(count) : '—';
         document.getElementById('total-ms').textContent = total !== '' ? total : '—';
+        try {
+          // Read searchUsed array (sessionStorage preferred)
+          var rawSU = sessionStorage.getItem('searchUsed');
+          if (rawSU === null) rawSU = localStorage.getItem('searchUsed');
+          var usedCount = '—';
+          if (rawSU) {
+            try {
+              var arr = JSON.parse(rawSU);
+              if (Array.isArray(arr)) {
+                var trues = 0;
+                for (var i=0;i<arr.length;i++) if (arr[i]) trues++;
+                usedCount = String(trues);
+              }
+            } catch(e) { usedCount = '—'; }
+          }
+          var el = document.getElementById('search-used');
+          if (el) el.textContent = usedCount;
+        } catch(e) {}
+        try {
+          // Read accumulated pause time (time spent on cover.html)
+          var pauseS = sessionStorage.getItem('pauseAccumMs');
+          if (pauseS === null) pauseS = localStorage.getItem('pauseAccumMs');
+          var coverMs = (pauseS !== null && pauseS !== undefined) ? String(pauseS) : '—';
+          var coverEl = document.getElementById('cover-ms');
+          if (coverEl) coverEl.textContent = coverMs;
+        } catch(e) {}
+        try {
+          // Read keyboardUsed array (sessionStorage preferred)
+          var rawKU = sessionStorage.getItem('keyboardUsed');
+          if (rawKU === null) rawKU = localStorage.getItem('keyboardUsed');
+          var kCount = '—';
+          if (rawKU) {
+            try {
+              var arr2 = JSON.parse(rawKU);
+              if (Array.isArray(arr2)) {
+                var tr = 0;
+                for (var j=0;j<arr2.length;j++) if (arr2[j]) tr++;
+                kCount = String(tr);
+              }
+            } catch(e) { kCount = '—'; }
+          }
+          var kel = document.getElementById('keyboard-used');
+          if (kel) kel.textContent = kCount;
+        } catch(e) {}
+        try {
+          // Read stored survey response and display NPS if present.
+          // Support both the newer plain-string format (e.g. "7") and
+          // older JSON object format ({ nps: '7', comment: '...' }).
+          var rawSR = sessionStorage.getItem('surveyResponse');
+          if (rawSR === null) rawSR = localStorage.getItem('surveyResponse');
+          var npsDisplay = '—';
+          var npsValue = null;
+          if (rawSR) {
+            try {
+              var parsed = JSON.parse(rawSR);
+              // If parsed is an object with nps property, prefer that
+              if (parsed && typeof parsed === 'object' && (parsed.nps !== null && parsed.nps !== undefined)) {
+                npsValue = parsed.nps;
+                npsDisplay = String(parsed.nps);
+              } else if (parsed !== null && parsed !== undefined) {
+                // If parsed is a primitive (number/string), show it
+                npsValue = parsed;
+                npsDisplay = String(parsed);
+              }
+            } catch (e) {
+              // Not valid JSON — treat rawSR as the plain stored value
+              npsValue = rawSR;
+              npsDisplay = String(rawSR);
+            }
+          }
+          var nel = document.getElementById('nps-score');
+          if (nel) nel.textContent = npsDisplay;
+
+          // --- Build CSV row for this run ---
+          try {
+            // time_on_task_ms: prefer avgSelectionTimeMs (average selection time).
+            // Fallback to stored totalRunMs or compute from startTime if avg is missing.
+            var timeMs = null;
+            try {
+              var avgMs = sessionStorage.getItem('avgSelectionTimeMs');
+              if (avgMs === null) avgMs = localStorage.getItem('avgSelectionTimeMs');
+              if (avgMs !== null && avgMs !== undefined) {
+                var numAvg = Number(avgMs);
+                if (isFinite(numAvg)) {
+                  timeMs = String(numAvg);
+                }
+              }
+            } catch(e) { /* ignore and fallback below */ }
+
+            if (timeMs === null) {
+              try { timeMs = sessionStorage.getItem('totalRunMs'); } catch(e) { timeMs = null; }
+              if (timeMs === null) try { timeMs = localStorage.getItem('totalRunMs'); } catch(e) { timeMs = null; }
+              if (!timeMs) {
+                try {
+                  var st = sessionStorage.getItem('startTime');
+                  if (st === null) st = localStorage.getItem('startTime');
+                  if (st) timeMs = String(Date.now() - parseInt(st,10));
+                } catch(e) { timeMs = ''+0; }
+              }
+            }
+
+            // searches_used: count true entries in searchUsed array
+            var searchesUsed = 0;
+            try {
+              var rawSU = sessionStorage.getItem('searchUsed');
+              if (rawSU === null) rawSU = localStorage.getItem('searchUsed');
+              if (rawSU) {
+                var arr = JSON.parse(rawSU);
+                if (Array.isArray(arr)) {
+                  for (var i=0;i<arr.length;i++) if (arr[i]) searchesUsed++;
+                }
+              }
+            } catch(e) { searchesUsed = 0; }
+
+            // keyboard_used: count true entries in keyboardUsed array
+            var keyboardUsed = 0;
+            try {
+              var rawKU = sessionStorage.getItem('keyboardUsed');
+              if (rawKU === null) rawKU = localStorage.getItem('keyboardUsed');
+              if (rawKU) {
+                var karr = JSON.parse(rawKU);
+                if (Array.isArray(karr)) {
+                  for (var j=0;j<karr.length;j++) if (karr[j]) keyboardUsed++;
+                }
+              }
+            } catch(e) { keyboardUsed = 0; }
+
+            // nps: try parsed numeric value
+            var npsNum = '';
+            try {
+              if (npsValue !== null && npsValue !== undefined) npsNum = String(npsValue);
+            } catch(e) { npsNum = ''; }
+
+            // Compute usableCount (non-X slots) from targetSpells or spells and
+            // normalize searchesUsed by that count (store as float).
+            var usableCount = null;
+            try {
+              var rawT = sessionStorage.getItem('targetSpells'); if (rawT === null) rawT = localStorage.getItem('targetSpells');
+              if (rawT) {
+                var tmap = JSON.parse(rawT);
+                if (tmap && typeof tmap === 'object') {
+                  var cc = 0;
+                  Object.keys(tmap).forEach(function(p){ try { var v = tmap[p]; if (v !== null && v !== undefined && String(v).trim() !== '') cc++; } catch(e){} });
+                  usableCount = cc;
+                }
+              }
+            } catch(e) { usableCount = null; }
+            if (usableCount === null) {
+              try {
+                var rawS2 = sessionStorage.getItem('spells'); if (rawS2 === null) rawS2 = localStorage.getItem('spells');
+                if (rawS2) {
+                  var smap2 = JSON.parse(rawS2);
+                  if (smap2 && typeof smap2 === 'object') {
+                    var cc2 = 0;
+                    Object.keys(smap2).forEach(function(p){ try { var v = smap2[p]; if (v !== null && v !== undefined && String(v).trim() !== '') cc2++; } catch(e){} });
+                    usableCount = cc2;
+                  }
+                }
+              } catch(e) { usableCount = null; }
+            }
+            if (!(isFinite(usableCount) && usableCount > 0)) usableCount = 16;
+
+            var searchesNormalized = 0.0;
+            try { searchesNormalized = Number(searchesUsed) / Number(usableCount); } catch(e) { searchesNormalized = 0.0; }
+
+            // info_time_ms: Spellcaster info page time (pauseAccumMs)
+            var infoTimeMs = '';
+            try {
+              var pauseS = sessionStorage.getItem('pauseAccumMs'); if (pauseS === null) pauseS = localStorage.getItem('pauseAccumMs');
+              infoTimeMs = (pauseS !== null && pauseS !== undefined) ? String(pauseS) : '';
+            } catch(e) { infoTimeMs = ''; }
+
+            // Compose CSV row: time_on_task_ms, searches_used(normalized float), keyboard_used(normalized float), info_time_ms, nps
+            var keyboardNormalized = 0.0;
+            try { keyboardNormalized = Number(keyboardUsed) / Number(usableCount); } catch(e) { keyboardNormalized = 0.0; }
+            var row = [String(timeMs || ''), String(Number(searchesNormalized).toFixed(4)), String(Number(keyboardNormalized).toFixed(4)), String(infoTimeMs), String(npsNum)].join(',');
+
+            // Retrieve existing CSV from localStorage (persist across sessions)
+            var csvKey = 'allRunsCSV';
+            var existing = null;
+            try { existing = localStorage.getItem(csvKey); } catch(e) { existing = null; }
+            if (!existing || existing.length === 0) {
+              existing = 'time_on_task_ms,searches_used,keyboard_used,info_time_ms,nps\n';
+            }
+
+            // Deduplicate: avoid appending if last non-empty line equals current row
+            var lines = existing.split('\n');
+            // find last non-empty line
+            var lastLine = '';
+            for (var li = lines.length-1; li >= 0; li--) {
+              if (lines[li] && lines[li].trim().length > 0) { lastLine = lines[li].trim(); break; }
+            }
+            if (lastLine !== row) {
+              existing = existing + row + '\n';
+              try { localStorage.setItem(csvKey, existing); } catch(e) {}
+            }
+
+            // Display CSV in textarea
+            try {
+              var textarea = document.getElementById('runs-csv-text');
+              if (textarea) textarea.value = existing;
+            } catch(e) {}
+
+            // Wire download/clear buttons
+            try {
+              var dl = document.getElementById('download-csv');
+              if (dl) dl.addEventListener('click', function(){
+                try {
+                  var data = localStorage.getItem(csvKey) || existing;
+                  var blob = new Blob([data], {type: 'text/csv;charset=utf-8;'});
+                  var url = URL.createObjectURL(blob);
+                  var a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'runs.csv';
+                  document.body.appendChild(a);
+                  a.click();
+                  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+                } catch(e) { alert('Download failed'); }
+              });
+
+              var clr = document.getElementById('clear-runs');
+              if (clr) clr.addEventListener('click', function(){
+                try { localStorage.removeItem(csvKey); } catch(e) {}
+                try { sessionStorage.removeItem(csvKey); } catch(e) {}
+                try { document.getElementById('runs-csv-text').value = 'time_on_task_ms,searches_used,keyboard_used,info_time_ms,nps\n'; } catch(e) {}
+              });
+            } catch(e) {}
+
+          } catch(e) {}
+        } catch(e) {}
       } catch (e) {}
     })();
   </script>

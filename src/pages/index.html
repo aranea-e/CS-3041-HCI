@@ -36,13 +36,39 @@
           <li>When the spellbook matches the one you are trying to recreate, your data will be recorded and you will be redirected</li>
         </ul>
 
-        <div class="hf-cta">
-          <a href="spelllist.html?clearAll=1" onclick="try{ /* clear previous metrics */ localStorage.removeItem('startTime'); sessionStorage.removeItem('startTime'); localStorage.removeItem('selectionCount'); sessionStorage.removeItem('selectionCount'); localStorage.removeItem('avgSelectionTimeMs'); sessionStorage.removeItem('avgSelectionTimeMs'); /* initialize new run */ var t = String(Date.now()); try{ localStorage.setItem('startTime', t); }catch(e){} try{ sessionStorage.setItem('startTime', t); }catch(e){} try{ localStorage.setItem('selectionCount','0'); }catch(e){} try{ sessionStorage.setItem('selectionCount','0'); }catch(e){} }catch(e){}"><button type="button">Start</button></a>
-        </div>
+          <div class="hf-cta">
+            <a href="cover.html?clearAll=1" onclick="try{ /* clear previous metrics */ localStorage.removeItem('startTime'); sessionStorage.removeItem('startTime'); localStorage.removeItem('selectionCount'); sessionStorage.removeItem('selectionCount'); localStorage.removeItem('avgSelectionTimeMs'); sessionStorage.removeItem('avgSelectionTimeMs'); /* clear previous search-usage */ try{ localStorage.removeItem('searchUsed'); }catch(e){} try{ sessionStorage.removeItem('searchUsed'); }catch(e){} /* clear previous keyboard-usage */ try{ localStorage.removeItem('keyboardUsed'); }catch(e){} try{ sessionStorage.removeItem('keyboardUsed'); }catch(e){} /* reset cover info to defaults */ try{ localStorage.setItem('cover_icName',''); }catch(e){} try{ sessionStorage.setItem('cover_icName',''); }catch(e){} try{ localStorage.setItem('cover_oocName',''); }catch(e){} try{ sessionStorage.setItem('cover_oocName',''); }catch(e){} try{ localStorage.setItem('cover_spellbook','OOC'); }catch(e){} try{ sessionStorage.setItem('cover_spellbook','OOC'); }catch(e){} try{ localStorage.setItem('cover_path','1'); }catch(e){} try{ sessionStorage.setItem('cover_path','1'); }catch(e){} try{ localStorage.setItem('cover_armor','1'); }catch(e){} try{ sessionStorage.setItem('cover_armor','1'); }catch(e){} try{ localStorage.setItem('cover_armor_user','0'); }catch(e){} try{ sessionStorage.setItem('cover_armor_user','0'); }catch(e){} /* clear working spell list and options so Spell List is empty */ try{ localStorage.removeItem('spells'); }catch(e){} try{ sessionStorage.removeItem('spells'); }catch(e){} try{ localStorage.removeItem('spellOptions'); }catch(e){} try{ sessionStorage.removeItem('spellOptions'); }catch(e){} /* initialize new run */ var t = String(Date.now()); try{ localStorage.setItem('startTime', t); }catch(e){} try{ sessionStorage.setItem('startTime', t); }catch(e){} try{ localStorage.setItem('selectionCount','0'); }catch(e){} try{ sessionStorage.setItem('selectionCount','0'); }catch(e){} /* initialize empty searchUsed array */ try{ var _arr = JSON.stringify(new Array(16).fill(false)); sessionStorage.setItem('searchUsed', _arr); try{ localStorage.setItem('searchUsed', _arr); }catch(e){} }catch(e){} /* initialize empty keyboardUsed array */ try{ var _k = JSON.stringify(new Array(16).fill(false)); sessionStorage.setItem('keyboardUsed', _k); try{ localStorage.setItem('keyboardUsed', _k); }catch(e){} }catch(e){} }catch(e){}"><button type="button">Start</button></a>
+            </div>
+            <script>
+              (function(){
+                try{
+                  var startLink = document.querySelector('.hf-cta a[href^="cover.html"]');
+                  if (startLink) {
+                    startLink.addEventListener('click', function(){
+                      try{ sessionStorage.setItem('clearAllPending','1'); }catch(e){}
+                      try{ localStorage.setItem('clearAllPending','1'); }catch(e){}
+                      try{ localStorage.removeItem('spells'); }catch(e){}
+                      try{ sessionStorage.removeItem('spells'); }catch(e){}
+                      try{ localStorage.removeItem('spellOptions'); }catch(e){}
+                      try{ sessionStorage.removeItem('spellOptions'); }catch(e){}
+                      // Reset any accumulated pause time so Total Time starts fresh
+                      try { sessionStorage.setItem('pauseAccumMs','0'); } catch(e) {}
+                      try { localStorage.setItem('pauseAccumMs','0'); } catch(e) {}
+                      try { sessionStorage.removeItem('pauseStart'); } catch(e) {}
+                      try { localStorage.removeItem('pauseStart'); } catch(e) {}
+                      // Ensure a fresh startTime is recorded for the run so live timers work
+                      try { var t = String(Date.now()); sessionStorage.setItem('startTime', t); } catch(e) {}
+                      try { var t2 = String(Date.now()); localStorage.setItem('startTime', t2); } catch(e) {}
+                    }, {passive:true});
+                  }
+                }catch(e){}
+              })();
+            </script>
       </section>
 
       <aside class="right-col">
-        <h2 style="margin-top:0;">Replica</h2>
+        <h2 style="margin-top:0;">Replicate:</h2>
+        <div id="replica-meta" style="font-size:0.95rem;color:#666;margin-top:0.25rem;">&nbsp;</div>
         <div class="replica-grid" aria-hidden="true" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
           <!-- Rows 1..5: three columns each -->
           <div class="spell-slot" data-replica="true" data-position="1-1">Select Spell</div>
@@ -92,6 +118,17 @@
 
       function readSpellsMap(){ try{ const r = localStorage.getItem('spells'); return r?JSON.parse(r):{} }catch(e){return{}} }
 
+      // Choose random path (1,2,3) with equal weighting and optional armor for 2/3-paths
+      function chooseRandomPathAndArmor(){
+        const paths = [1,2,3];
+        const path = paths[Math.floor(Math.random()*paths.length)];
+        let armor = false;
+        if (path === 2 || path === 3) {
+          armor = Math.random() < 0.10; // 10% chance to generate with armor for 2/3 paths
+        }
+        return { path: path, armor: armor };
+      }
+
       function getCircleFromContext(){
         try{
           const params = new URLSearchParams(window.location.search);
@@ -111,7 +148,7 @@
           // Iterative weighted choice: try highest first with 90% chance,
           // otherwise continue to next lower with 90% of remaining, etc.
           // maxCircle is the highest allowed circle (row number).
-          const top = Math.max(1, Math.min(6, Math.floor(maxCircle)));
+          var top = Math.max(1, Math.min(6, Math.floor(maxCircle)));
           for (let c = top; c > 1; c--) {
             if (Math.random() < 0.9) return c;
             // else continue to next lower
@@ -133,7 +170,6 @@
               return 'Regional';
             }
           }
-
           const chosenCircle = chooseCircleForRow(row);
           const pool = circleLabels[chosenCircle] || [];
           if (!pool || !pool.length) return '—';
@@ -142,18 +178,70 @@
 
         // Always generate a fresh replica on load. Do not reuse stored map
         // when rendering the replica grid so each visit shows a new random build.
+        // Choose a target path and whether armor applies to generated target.
+        const buildMeta = chooseRandomPathAndArmor();
+        const chosenPath = buildMeta.path;
+        const generatedWithArmor = buildMeta.armor;
+
+        // Update the small metadata label under 'Replicate' showing chosen path/armor
+        try {
+          var metaEl = document.getElementById('replica-meta');
+          if (metaEl) {
+            var txt = String(chosenPath) + '-Path';
+            if (generatedWithArmor && (chosenPath === 2 || chosenPath === 3)) txt += ', Armor';
+            metaEl.textContent = txt;
+          }
+        } catch (e) {}
+
+        // Allowed columns per path: 1 -> [1], 2 -> [1,2], 3 -> [1,2,3]
+        function isColumnAllowedForPath(col, path) {
+          if (path === 1) return col === 1;
+          if (path === 2) return col === 1 || col === 2;
+          return true;
+        }
+
         slots.forEach(s => {
           const pos = s.dataset.position;
-          // derive the row number from data-position like "3-2"
+          // derive the row and col number from data-position like "3-2"
           let row = 1;
+          let col = 1;
           try {
-            const p = String(pos || '').split('-')[0];
-            const r = parseInt(p, 10);
+            const parts = String(pos || '').split('-');
+            const r = parseInt(parts[0], 10);
+            const c = parseInt(parts[1], 10);
             if (!Number.isNaN(r)) row = r;
-          } catch (e) { row = circle; }
+            if (!Number.isNaN(c)) col = c;
+          } catch (e) { row = circle; col = 1; }
 
-          s.textContent = pickForSlotRow(row);
-          s.classList.add('selected');
+          // If this column is not part of the chosen path, leave it empty
+          if (!isColumnAllowedForPath(col, chosenPath)) {
+            s.textContent = '';
+            s.classList.remove('selected');
+            s.classList.add('replica-disabled');
+            return;
+          }
+          // If generated target has armor, remove the bottom option per-column:
+          // middle column (col=2) remove row 6; other columns remove row 5.
+          if (generatedWithArmor) {
+            if ((col === 2 && row === 6) || (col !== 2 && row === 5)) {
+              s.textContent = '';
+              s.classList.remove('selected');
+              s.classList.add('replica-disabled');
+              return;
+            }
+          }
+
+          // For allowed columns, pick a spell.
+          const label = pickForSlotRow(row);
+          if (!label || label === '—' || String(label).trim() === '') {
+            s.textContent = '';
+            s.classList.remove('selected');
+            s.classList.add('replica-disabled');
+          } else {
+            s.classList.remove('replica-disabled');
+            s.textContent = label;
+            s.classList.add('selected');
+          }
         });
 
         // Persist the current replica into localStorage so other pages can

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Survey</title>
+  <link rel="stylesheet" href="../css/styles.css" />
+  <style>
+    .hf-container{max-width:760px;margin:3rem auto;padding:1.25rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
+    .hf-cta{display:inline-block;margin-top:1rem}
+    .hf-cta button{padding:0.6rem 1rem;font-size:1rem}
+  </style>
+</head>
+<body>
+  <main class="hf-container">
+
+    <form id="nps-form" style="margin-top:1rem;">
+      <p style="font-weight:600;">How likely would you be to recommend this tool over existing tools?</p>
+      <div aria-label="Net Promoter Score" role="group" style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+        <!-- Render buttons 0..10 -->
+        <!-- Each option is a radio so one value is selected; default none selected -->
+        <div style="display:flex; gap:0.25rem; flex-wrap:wrap;">
+          <!-- generate 0..10 -->
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="0"> 0
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="1"> 1
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="2"> 2
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="3"> 3
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="4"> 4
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="5"> 5
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="6"> 6
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="7"> 7
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="8"> 8
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="9"> 9
+          </label>
+          <label style="display:inline-flex; align-items:center; gap:0.25rem;">
+            <input type="radio" name="nps" value="10"> 10
+          </label>
+        </div>
+      </div>
+
+      <div class="hf-cta" style="margin-top:1rem;">
+        <button id="nps-submit" type="button">Continue to Metrics</button>
+      </div>
+    </form>
+
+    <script>
+      (function(){
+        document.getElementById('nps-submit').addEventListener('click', function(){
+          try {
+            var form = document.getElementById('nps-form');
+            var val = form.querySelector('input[name="nps"]:checked');
+            // Persist only the numeric value (string) in storage
+            if (val && val.value !== undefined && val.value !== null) {
+              try { sessionStorage.setItem('surveyResponse', String(val.value)); } catch(e) {}
+              try { localStorage.setItem('surveyResponse', String(val.value)); } catch(e) {}
+            } else {
+              try { sessionStorage.removeItem('surveyResponse'); } catch(e) {}
+              try { localStorage.removeItem('surveyResponse'); } catch(e) {}
+            }
+          } catch(e) {}
+          // navigate to metrics
+          window.location.href = 'end.html';
+        });
+      })();
+    </script>
+  </main>
+</body>
+</html>

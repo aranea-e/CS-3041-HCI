@@ -17,6 +17,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Helper: whether a slot is interactable (not a replica, not labels/clear, and not disabled by cover path)
+    function isSlotInteractable(el) {
+        try {
+            if (!el) return false;
+            if (el.dataset && el.dataset.replica) return false;
+            if (el.classList.contains('clear-btn')) return false;
+            if (el.classList.contains('alchemy-label')) return false;
+            if (el.classList.contains('col-disabled') || el.classList.contains('row-disabled')) return false;
+            return true;
+        } catch (e) { return false; }
+    }
+
     // Mark the first empty slot by iterating columns first.
     function markFirstEmptySlot() {
         try {
@@ -24,8 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.querySelectorAll('.spell-slot.first-empty:not([data-replica])').forEach(el => el.classList.remove('first-empty'));
 
             // Gather all positions present in the DOM to determine grid bounds (ignore replica slots)
-            const slots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])'))
-                .filter(s => !s.classList.contains('clear-btn') && !s.classList.contains('alchemy-label'));
+            const slots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])')).filter(el => isSlotInteractable(el));
 
             let maxRow = 0, maxCol = 0;
             const positions = new Set();
@@ -54,8 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!positions.has(key)) continue; // position not present in DOM
                     const el = document.querySelector(`.spell-slot[data-position="${key}"]:not([data-replica])`);
                     if (!el) continue;
-                    // Skip non-interactable labels and clear button
-                    if (el.classList.contains('clear-btn') || el.classList.contains('alchemy-label')) continue;
+                    // Skip non-interactable labels, clear button and disabled columns
+                    if (!isSlotInteractable(el)) continue;
                     // Consider a slot occupied if it has the 'selected' class
                     if (!el.classList.contains('selected')) {
                         el.classList.add('first-empty');
@@ -131,7 +142,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = map[pos];
             // Only rehydrate interactive slots — never touch display-only replicas
             const target = document.querySelector(`.spell-slot[data-position="${pos}"]:not([data-replica])`);
-            if (target) {
+            if (target && isSlotInteractable(target)) {
                 target.textContent = label;
                 target.classList.add('selected');
             }
@@ -206,9 +217,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Keyboard navigation implementation ---
     (function setupKeyboardNavigation() {
         // Build grid model from DOM
-        const allSlots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])'));
         const clearEl = document.querySelector('.spell-slot.clear-btn:not([data-replica])');
         const alchemyEl = document.querySelector('.spell-slot.alchemy-label:not([data-replica])');
+        const allSlots = Array.from(document.querySelectorAll('.spell-slot:not([data-replica])')).filter(el => isSlotInteractable(el));
 
         const grid = {}; // grid[col] = sorted array of rows
         let minCol = Infinity, maxCol = -Infinity;
@@ -224,6 +235,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Skip the alchemy label and the Clear button as they are non-interactable
             if (el === alchemyEl) return;
             if (el === clearEl) return;
+            // Skip any slot disabled by the cover page
+            if (el.classList.contains('col-disabled') || el.classList.contains('row-disabled')) return;
 
             if (!grid[c]) grid[c] = new Set();
             grid[c].add(r);
@@ -242,7 +255,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Helper to get element for a given row/col
         function elFor(row, col) {
-            return document.querySelector(`.spell-slot[data-position="${row}-${col}"]:not([data-replica])`);
+            var el = document.querySelector(`.spell-slot[data-position="${row}-${col}"]:not([data-replica])`);
+            if (!el) return null;
+            if (!isSlotInteractable(el)) return null;
+            return el;
         }
 
         // Find closest row in column to targetRow
@@ -269,7 +285,9 @@ document.addEventListener('DOMContentLoaded', () => {
         function initSelection() {
             try {
                 const fe = document.querySelector('.spell-slot.first-empty:not([data-replica])');
-                if (fe && fe.dataset && fe.dataset.position) {
+                    if (fe && fe.classList && (fe.classList.contains('col-disabled') || fe.classList.contains('row-disabled'))) {
+                    // ignore first-empty if it points to a disabled column
+                } else if (fe && fe.dataset && fe.dataset.position) {
                     const parts = fe.dataset.position.split('-').map(x=>parseInt(x,10));
                     if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
                         navState.type = 'cell';
@@ -447,6 +465,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!btn) return;
             // ignore replica (display-only) slots
             if (btn.dataset && btn.dataset.replica) return;
+            // ignore slots disabled by cover path
+            if (btn.classList && (btn.classList.contains('col-disabled') || btn.classList.contains('row-disabled'))) return;
             if (btn.classList.contains('clear-btn')) {
                 // When clear is clicked, switch to clear state but DO NOT
                 // overwrite the remembered column. Remembered column should
@@ -480,6 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     // ignore replica (display-only) slots
                     if (btn.dataset && btn.dataset.replica) { lastHoveredBtn = null; return; }
+                    // ignore disabled columns/rows
+                    if (btn.classList && (btn.classList.contains('col-disabled') || btn.classList.contains('row-disabled'))) { lastHoveredBtn = null; return; }
                     // Only act when the hovered element changes
                     if (btn === lastHoveredBtn) return;
                     lastHoveredBtn = btn;
@@ -520,6 +542,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // ignore clicks on the small replica
         if (button.dataset && button.dataset.replica) return;
 
+        // ignore clicks on slots disabled by cover path
+        if (button.classList && (button.classList.contains('col-disabled') || button.classList.contains('row-disabled'))) return;
+
         const position = button.dataset.position;
         // Clear button handling: if clear button clicked, wipe stored spells and rehydrate UI
         if (button.classList.contains('clear-btn')) {
@@ -548,6 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // keep the clear button label as 'Clear' and skip the alchemy label
                 if (slot.classList.contains('clear-btn')) return;
                 if (slot.classList.contains('alchemy-label')) return;
+                if (slot.classList.contains('col-disabled') || slot.classList.contains('row-disabled')) return;
                 slot.textContent = 'Select Spell';
                 slot.classList.remove('selected');
             });
@@ -603,6 +629,46 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Canonical ordering of the 16 interactive slots (row-major)
+const positionsOrder = ['1-1','1-2','1-3','2-1','2-2','2-3','3-1','3-2','3-3','4-1','4-2','4-3','5-1','5-2','5-3','6-2'];
+
+// Helper to persist keyboard-used per-slot (merge true values)
+function setKeyboardUsedForPosition(pos, used) {
+    try {
+        let raw = sessionStorage.getItem('keyboardUsed');
+        if (raw === null || raw === undefined) raw = localStorage.getItem('keyboardUsed');
+        let arr = null;
+        if (raw) {
+            try { arr = JSON.parse(raw); } catch(e) { arr = null; }
+        }
+        if (!Array.isArray(arr) || arr.length !== positionsOrder.length) {
+            arr = new Array(positionsOrder.length).fill(false);
+        }
+        const idx = positionsOrder.indexOf(pos);
+        if (idx !== -1) {
+            arr[idx] = !!arr[idx] || !!used;
+            try { sessionStorage.setItem('keyboardUsed', JSON.stringify(arr)); } catch(e) {}
+            try { localStorage.setItem('keyboardUsed', JSON.stringify(arr)); } catch(e) {}
+        }
+    } catch (e) {
+        // ignore
+    }
+}
+
+// Track last input modality: keyboard vs pointer/touch. Stored in sessionStorage
+try {
+    document.addEventListener('keydown', (ev) => {
+        try { sessionStorage.setItem('lastInputWasKeyboard', '1'); } catch(e) {}
+    }, {passive:true});
+    document.addEventListener('pointerdown', (ev) => {
+        try { sessionStorage.setItem('lastInputWasKeyboard', '0'); } catch(e) {}
+    }, {passive:true});
+    // also handle mousedown for older environments
+    document.addEventListener('mousedown', (ev) => {
+        try { sessionStorage.setItem('lastInputWasKeyboard', '0'); } catch(e) {}
+    }, {passive:true});
+} catch (e) {}
+
 function navigateToSelection(position) {
     // Store position in localStorage for use on selection page
     try {
@@ -610,6 +676,14 @@ function navigateToSelection(position) {
     } catch (e) {
         // localStorage may be unavailable in some contexts; ignore silently
     }
+    try {
+        // check whether the last input before activation was keyboard
+        var k = sessionStorage.getItem('lastInputWasKeyboard');
+        if (k === null) k = localStorage.getItem('lastInputWasKeyboard');
+        var used = k === '1';
+        // persist keyboard-used for this slot (merge true)
+        setKeyboardUsedForPosition(position, used);
+    } catch (e) {}
 
     // Pass position in query string as a fallback (works even when sessionStorage isn't available)
     const url = `selection.html?pos=${encodeURIComponent(position)}`;

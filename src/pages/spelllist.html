@@ -61,6 +61,26 @@
             background-color: #f0f0f0; /* gray rows */
         }
 
+        /* Disabled column/row styling: hide text and show an X overlay */
+        .spell-slot.col-disabled,
+        .spell-slot.row-disabled {
+            position: relative;
+            pointer-events: none;
+            color: transparent !important;
+        }
+        .spell-slot.col-disabled::after,
+        .spell-slot.row-disabled::after {
+            content: '✕';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            color: #a00;
+            user-select: none;
+        }
+
         /* Remove default focus outline for selected items specifically */
         .spell-slot.selected:focus,
         .spell-slot.kbd-selected:focus {
@@ -119,11 +139,18 @@
             (function(){
                 try {
                     var params = new URLSearchParams(window.location.search);
-                    if (params.get('clearAll')) {
+                    var flag = false;
+                    try { if (params.get('clearAll')) flag = true; } catch(e){}
+                    try { if (!flag && sessionStorage.getItem('clearAllPending')) flag = true; } catch(e){}
+                    try { if (!flag && localStorage.getItem('clearAllPending')) flag = true; } catch(e){}
+                    if (flag) {
                         try { localStorage.removeItem('spells'); } catch(e){}
                         try { localStorage.removeItem('spellOptions'); } catch(e){}
                         try { sessionStorage.removeItem('spells'); } catch(e){}
                         try { sessionStorage.removeItem('spellOptions'); } catch(e){}
+                        // clear the pending flag so subsequent visits are normal
+                        try { sessionStorage.removeItem('clearAllPending'); } catch(e){}
+                        try { localStorage.removeItem('clearAllPending'); } catch(e){}
                         // Remove query param so reload doesn't keep clearing
                         try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch(e){}
                     }
@@ -131,14 +158,130 @@
                     // swallow
                 }
             })();
+            
+            // Apply column disabling based on cover.path before main.js runs.
+            // Register a DOMContentLoaded listener here so it executes before
+            // main.js's listener (listeners are called in registration order).
+            (function(){
+                function getCoverPath(){
+                    try{ var v = sessionStorage.getItem('cover_path'); if (v !== null) return v; }catch(e){}
+                    try{ var w = localStorage.getItem('cover_path'); if (w !== null) return w; }catch(e){}
+                    return null;
+                }
+
+                document.addEventListener('DOMContentLoaded', function(){
+                    // Ensure any pause started on cover.html is ended when arriving here
+                    try {
+                        // compute pause delta if pauseStart exists
+                        var ps = sessionStorage.getItem('pauseStart');
+                        if (!ps) ps = localStorage.getItem('pauseStart');
+                        if (ps) {
+                            var delta = Date.now() - parseInt(ps,10);
+                            if (isFinite(delta) && delta > 0) {
+                                var prev = parseInt(sessionStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                                var prevL = parseInt(localStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                                var acc = Math.max(prev, prevL) || 0;
+                                acc = acc + delta;
+                                try { sessionStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                                try { localStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                            }
+                        }
+                        try { sessionStorage.removeItem('pauseStart'); } catch(e){}
+                        try { localStorage.removeItem('pauseStart'); } catch(e){}
+                    } catch(e) {}
+                    try{
+                        var p = getCoverPath();
+                        // Live run timer: shows elapsed time excluding cover.html pauses
+                        (function(){
+                            function readStart(){ try{ var s=sessionStorage.getItem('startTime'); if(s===null) s=localStorage.getItem('startTime'); return parseInt(s||'0',10)||0; }catch(e){return 0;} }
+                            function readPause(){ try{ var p=sessionStorage.getItem('pauseAccumMs'); if(p===null) p=localStorage.getItem('pauseAccumMs'); return parseInt(p||'0',10)||0; }catch(e){return 0;} }
+                            function fmt(ms){ return (ms/1000).toFixed(1) + ' s'; }
+                            var el = null;
+                            var id = null;
+                            function update(){
+                                try {
+                                    if (!el) el = document.getElementById('live-timer');
+                                    if(!el) return;
+                                    var start = readStart();
+                                    if(!start){ el.textContent = '0.0 s'; return; }
+                                    var pause = readPause();
+                                    var ms = Date.now() - start - (pause||0);
+                                    if(!isFinite(ms) || ms < 0) ms = 0;
+                                    el.textContent = fmt(ms);
+                                } catch(e) {}
+                            }
+                            // Document is already in DOMContentLoaded handler; call immediately
+                            try { update(); id = setInterval(update, 200); } catch(e) {}
+                            window.addEventListener('beforeunload', function(){ if(id) clearInterval(id); });
+                        })();
+                        var disabledCols = [];
+                        // Read armor flag
+                        var armor = (function(){ try{ var v = sessionStorage.getItem('cover_armor'); if (v !== null) return v; }catch(e){} try{ var w = localStorage.getItem('cover_armor'); if (w !== null) return w; }catch(e){} return '0'; })();
+                        var bottomDisabled = false;
+                        if (!p || p === '1') {
+                            // 1-path: disable columns 2 and 3
+                            disabledCols = [2,3];
+                            // when on path=1, armor selection doesn't trigger bottom disabling
+                            bottomDisabled = false;
+                        } else if (p === '2') {
+                            // 2-path: disable column 3 only
+                            disabledCols = [3];
+                            // if armor is selected on a non-1 path, disable bottom options
+                            if (armor === '1') bottomDisabled = true;
+                        } else {
+                            disabledCols = [];
+                            if (armor === '1' && p !== '1') bottomDisabled = true;
+                        }
+
+                        // Iterate interactive slots and mark those in disabled columns
+                        Array.from(document.querySelectorAll('.spell-slot:not([data-replica])')).forEach(function(el){
+                            try{
+                                if (!el || !el.dataset || !el.dataset.position) return;
+                                // Skip clear and alchemy labels
+                                if (el.classList.contains('clear-btn') || el.classList.contains('alchemy-label')) return;
+                                var parts = String(el.dataset.position).split('-').map(function(x){ return parseInt(x,10); });
+                                if (parts.length < 2) return;
+                                var col = parts[1];
+                                var row = parts[0];
+                                if (disabledCols.indexOf(col) !== -1) {
+                                    // mark as disabled: add class, remove any selectable markers
+                                    el.classList.add('col-disabled');
+                                    try { el.classList.remove('selected'); }catch(e){}
+                                    try { el.classList.remove('first-empty'); }catch(e){}
+                                    try { el.classList.remove('kbd-selected'); }catch(e){}
+                                    try { el.textContent = ''; }catch(e){}
+                                    try { el.setAttribute('aria-disabled','true'); }catch(e){}
+                                    try { el.tabIndex = -1; }catch(e){}
+                                }
+                                // If bottomDisabled, disable the bottom option per-column:
+                                // - middle column (col 2) uses row 6 (position 6-2)
+                                // - other columns use row 5 (positions 5-1 and 5-3)
+                                if (bottomDisabled) {
+                                    if ((col === 2 && row === 6) || (col !== 2 && row === 5)) {
+                                        el.classList.add('row-disabled');
+                                        try { el.classList.remove('selected'); }catch(e){}
+                                        try { el.classList.remove('first-empty'); }catch(e){}
+                                        try { el.classList.remove('kbd-selected'); }catch(e){}
+                                        try { el.textContent = ''; }catch(e){}
+                                        try { el.setAttribute('aria-disabled','true'); }catch(e){}
+                                        try { el.tabIndex = -1; }catch(e){}
+                                    }
+                                }
+                            }catch(e){}
+                        });
+                    }catch(e){}
+                }, { once: true });
+            })();
         </script>
 </head>
 
 <body class="js-initial-hide">
     <nav class="top-nav">
+        <a class="nav-btn" href="cover.html">Spellcaster Info</a>
         <a class="nav-btn" href="spelllist.html">Spell List</a>
         <a class="nav-btn" href="index.html" style="margin-left:auto;">Restart</a>
     </nav>
+    <div id="live-timer" style="position:fixed; right:12px; top:64px; background:#111; color:#fff; padding:6px 8px; border-radius:6px; font-size:0.9rem; z-index:10001;">0.0 s</div>
 
     <div class="page-layout">
         <div class="main-col">
@@ -243,30 +386,60 @@
                     if(!pos) return;
 
                     // Determine target label from stored targetSpells map
-                    var targetLabel = map && map[pos] ? String(map[pos]) : null;
+                    // Use hasOwnProperty check so empty strings are preserved
+                    var targetLabel = null;
+                    try {
+                        if (map && Object.prototype.hasOwnProperty.call(map, pos)) targetLabel = String(map[pos]);
+                    } catch (e) { targetLabel = null; }
 
-                    if (targetLabel) {
-                        s.textContent = targetLabel;
-                        s.classList.add('selected');
+                    if (targetLabel !== null) {
+                        // targetLabel may be an empty string (meaning intentionally absent)
+                        if (String(targetLabel).trim() === '') {
+                            s.textContent = '';
+                            s.classList.remove('selected');
+                            s.classList.remove('mismatch');
+                            s.classList.add('replica-disabled');
+                        } else {
+                            s.classList.remove('replica-disabled');
+                            s.textContent = targetLabel;
+                            s.classList.add('selected');
+                        }
                     } else {
+                        // No target information at all: show dash-like empty
                         s.textContent = '—';
                         s.classList.remove('selected');
                         s.classList.remove('mismatch');
-                        return;
+                        s.classList.add('replica-disabled');
                     }
 
                     // Compare against the interactive slot (user's current build)
                     // Interactive slots live in the main grid and do NOT have data-replica
                     try {
                         var interactive = document.querySelector(`.spell-slot[data-position="${pos}"]:not([data-replica])`);
+                        // Determine whether the interactive slot is disabled by cover path/armor
+                        var interactiveDisabled = false;
+                        try {
+                            if (interactive && interactive.classList && (interactive.classList.contains('col-disabled') || interactive.classList.contains('row-disabled'))) {
+                                interactiveDisabled = true;
+                            }
+                        } catch (e) {}
+
+                        // If disabled, treat as absent for purposes of label extraction
+                        if (interactiveDisabled) interactive = null;
                         var interactiveLabel = interactive ? String(interactive.textContent).trim() : null;
 
                         var normTarget = normalizeLabel(targetLabel);
                         var normInteractive = normalizeLabel(interactiveLabel);
 
                         if (normTarget === '' && normInteractive === '') {
-                            // both empty -> no mismatch
-                            s.classList.remove('mismatch');
+                            // Both empty: only a match if the interactive slot has been
+                            // intentionally disabled (X'd off). If it's simply unselected,
+                            // treat as a mismatch so the user must fill it.
+                            if (interactiveDisabled) {
+                                s.classList.remove('mismatch');
+                            } else {
+                                s.classList.add('mismatch');
+                            }
                         } else if (normTarget === normInteractive) {
                             s.classList.remove('mismatch');
                         } else {
@@ -301,7 +474,12 @@
                             var count = Math.max(countS, countL) || 0;
 
                             var totalMs = 0;
-                            if (start > 0) totalMs = Date.now() - start;
+                            // Subtract any accumulated pause time (time spent on cover.html)
+                            var pauseS = parseInt(sessionStorage.getItem('pauseAccumMs') || '0', 10) || 0;
+                            var pauseL = parseInt(localStorage.getItem('pauseAccumMs') || '0', 10) || 0;
+                            var pauseAccum = Math.max(pauseS, pauseL) || 0;
+                            if (start > 0) totalMs = Date.now() - start - pauseAccum;
+                            if (!isFinite(totalMs) || totalMs < 0) totalMs = 0;
                             var avgMs = 0;
                             if (count > 0) avgMs = Math.round(totalMs / count);
                             else avgMs = totalMs || 0;
@@ -311,7 +489,15 @@
                             // ignore
                         }
                         // Small delay to allow any pending visual updates
-                        setTimeout(function(){ window.location.href = 'end.html'; }, 60);
+                        try {
+                            // store total run ms so timer is considered stopped
+                            try { localStorage.setItem('totalRunMs', String(totalMs)); } catch(e) {}
+                            try { sessionStorage.setItem('totalRunMs', String(totalMs)); } catch(e) {}
+                            // remove startTime so further actions don't extend the timer
+                            try { localStorage.removeItem('startTime'); } catch(e) {}
+                            try { sessionStorage.removeItem('startTime'); } catch(e) {}
+                        } catch(e) {}
+                        setTimeout(function(){ window.location.href = 'survey.html'; }, 60);
                     }
                 } catch (e) {
                     // ignore redirect errors
