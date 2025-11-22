@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // detect B-variant page so we can alter first-empty/default behavior
+    const isSpelllistB = (function(){ try { return String(window.location.href || '').indexOf('spelllistB.html') !== -1; } catch(e){ return false; } })();
+
     // Helper: read/write spells map from localStorage
     function readSpellsMap() {
         try {
@@ -208,8 +211,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // After rehydration, mark the first empty slot (iterate columns first).
+    // For B-variant we remove first-empty functionality and will default
+    // selection to 1-1 instead of using the first-empty heuristic.
     try {
-        markFirstEmptySlot();
+        if (!isSpelllistB) {
+            markFirstEmptySlot();
+        } else {
+            // remove any existing first-empty marks left over from copied markup
+            try { document.querySelectorAll('.spell-slot.first-empty:not([data-replica])').forEach(el => el.classList.remove('first-empty')); } catch(e) {}
+        }
     } catch (e) {
         // ignore
     }
@@ -280,22 +290,33 @@ document.addEventListener('DOMContentLoaded', () => {
         let navState = { type: 'cell', row: null, col: null };
         let lastColumnWhileClear = null;
 
-        // Initialize selection: prefer `.first-empty` if present, otherwise
-        // fall back to top-left (smallest col, smallest row available).
+        // Initialize selection. For B-variant pages we default to 1-1 and
+        // remove the first-empty behavior. For A-variant pages preserve the
+        // original first-empty heuristic.
         function initSelection() {
             try {
-                const fe = document.querySelector('.spell-slot.first-empty:not([data-replica])');
-                    if (fe && fe.classList && (fe.classList.contains('col-disabled') || fe.classList.contains('row-disabled'))) {
-                    // ignore first-empty if it points to a disabled column
-                } else if (fe && fe.dataset && fe.dataset.position) {
-                    const parts = fe.dataset.position.split('-').map(x=>parseInt(x,10));
-                    if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
-                        navState.type = 'cell';
-                        navState.row = parts[0];
-                        navState.col = parts[1];
-                        lastColumnWhileClear = navState.col;
-                        applyVisualSelection();
-                        return;
+                if (isSpelllistB) {
+                    // remove any first-empty marks and select 1-1 if available
+                    try { document.querySelectorAll('.spell-slot.first-empty:not([data-replica])').forEach(el => el.classList.remove('first-empty')); } catch(e) {}
+                    const el = elFor(1,1);
+                    if (el) {
+                        navState.type = 'cell'; navState.row = 1; navState.col = 1; lastColumnWhileClear = 1; applyVisualSelection(); return;
+                    }
+                    // if 1-1 not available, fall through to normal fallback below
+                } else {
+                    // prefer `.first-empty` if present
+                    try {
+                        const fe = document.querySelector('.spell-slot.first-empty:not([data-replica])');
+                        if (fe && fe.classList && (fe.classList.contains('col-disabled') || fe.classList.contains('row-disabled'))) {
+                            // ignore first-empty if it points to a disabled column
+                        } else if (fe && fe.dataset && fe.dataset.position) {
+                            const parts = fe.dataset.position.split('-').map(x=>parseInt(x,10));
+                            if (parts.length >= 2 && !Number.isNaN(parts[0]) && !Number.isNaN(parts[1])) {
+                                navState.type = 'cell'; navState.row = parts[0]; navState.col = parts[1]; lastColumnWhileClear = navState.col; applyVisualSelection(); return;
+                            }
+                        }
+                    } catch (e) {
+                        // ignore and fallback
                     }
                 }
             } catch (e) {
@@ -309,18 +330,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rows = grid[col];
                 if (!rows || rows.length===0) continue;
                 // choose top row in that column
-                navState.type = 'cell';
-                navState.col = col;
-                navState.row = rows[0];
-                lastColumnWhileClear = col;
-                applyVisualSelection();
-                return;
+                navState.type = 'cell'; navState.col = col; navState.row = rows[0]; lastColumnWhileClear = col; applyVisualSelection(); return;
             }
             // fallback: select clear if nothing else
-            if (clearEl) {
-                navState.type = 'clear';
-                applyVisualSelection();
-            }
+            if (clearEl) { navState.type = 'clear'; applyVisualSelection(); }
         }
 
         function applyVisualSelection() {
@@ -686,6 +699,12 @@ function navigateToSelection(position) {
     } catch (e) {}
 
     // Pass position in query string as a fallback (works even when sessionStorage isn't available)
-    const url = `selection.html?pos=${encodeURIComponent(position)}`;
+    // If the user is on the B-version of the spelllist page, route to selectionB.html
+    var selectionTarget = 'selection.html';
+    try {
+        var path = (window.location.pathname || '') + (window.location.href || '');
+        if (String(path).indexOf('spelllistB.html') !== -1) selectionTarget = 'selectionB.html';
+    } catch (e) {}
+    const url = `${selectionTarget}?pos=${encodeURIComponent(position)}`;
     window.location.href = url;
 }

@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realms Spellbook B</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 1.5rem;
+            background-color: #fff;
+            color: #222;
+        }
+
+        /* Two-column layout for selection page: left = 33%, right = 67%. */
+        .selection-columns {
+            display: grid;
+            grid-template-columns: 33% 67%;
+            gap: 1.25rem;
+            align-items: start;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .left-col { width: 100%; min-width: 0; }
+        .right-col { width: 100%; min-width: 0; }
+
+        @media (max-width: 720px) { .selection-columns { grid-template-columns: 1fr; } }
+
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { display: none; }
+        .switch .slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0; background:#ccc; border-radius:20px; transition: background-color .15s ease; }
+        .switch .slider:before { content: ""; position:absolute; height:16px; width:16px; left:2px; top:2px; background:white; border-radius:50%; box-shadow:0 1px 2px rgba(0,0,0,0.15); transition: transform .15s ease; }
+        .switch input:checked + .slider { background-color: #18bca8; }
+        .switch input:checked + .slider:before { transform: translateX(20px); }
+        .top-row { position: relative; }
+        .top-row .buydowns-switch { position: relative; }
+        .top-row .buydowns-switch .switch { position: absolute; top: 50%; right: 6.25rem; transform: translateY(-50%); }
+            /* Ensure the Alternatives switch in the special row lines up
+               horizontally with the Buydowns switch above. Make the
+               special row a positioning context and apply the same offset. */
+            .special-row { position: relative; }
+            .special-row .buydowns-switch .switch {
+                position: absolute;
+                top: 50%;
+                right: 6.25rem;
+                transform: translateY(-50%);
+            }
+        .no-switch-anim .switch .slider, .no-switch-anim .switch .slider:before { transition: none !important; }
+
+        #circles { max-width: 640px; }
+        .circle-buttons { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem; }
+        .circle-btn { padding:0.45rem 0.75rem; border-radius:6px; border:1px solid #ccc; background:#fbfbfb; cursor:pointer; font-size:0.95rem; }
+        h2 { margin:0.4rem 0; font-weight:600; color:#333; }
+        .notice { color:#666; font-size:0.95rem; }
+        #top-controls { display:flex; flex-direction:column; gap:0.5rem; align-items:stretch; margin-bottom:0.75rem; }
+        #search-input { width:100%; padding:0.5rem 0.75rem; border-radius:6px; border:1px solid #ccc; font-size:0.95rem; box-sizing:border-box; }
+        .circle-btn.kbd-selected { color:#18bca8 !important; }
+        .buydowns-switch.kbd-selected span, .alternatives-switch.kbd-selected span { color:#18bca8 !important; }
+        .circle-btn:focus, #search-input:focus, .buydowns-switch input:focus, .alternatives-switch input:focus { outline:none !important; box-shadow:none !important; }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <a class="nav-btn" href="coverB.html">Spellcaster Info</a>
+        <a class="nav-btn" href="spelllistB.html">Spell List</a>
+        <a class="nav-btn" href="index.html" style="margin-left:auto;">Restart</a>
+    </nav>
+    <div id="live-timer" style="position:fixed; right:12px; top:64px; background:#111; color:#fff; padding:6px 8px; border-radius:6px; font-size:0.9rem; z-index:10001;">0.0 s</div>
+    <div class="selection-columns">
+        <div class="left-col">
+            <div id="top-controls">
+                <input id="search-input" type="search" placeholder="Search spells..." aria-label="Search spells" />
+                <div class="top-row" style="display:flex; justify-content:space-between; align-items:center; gap:1rem;">
+                    <button id="no-spell-btn" class="circle-btn">No Spell</button>
+                    <div class="buydowns-switch">
+                        <label class="switch">
+                            <input id="buydowns-toggle" type="checkbox" />
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left:0.5rem; font-weight:600;">Buydowns</span>
+                    </div>
+                </div>
+                <div class="special-row" style="margin-top:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                    <div id="special-buttons" style="display:flex; gap:0.5rem;">
+                        <button id="regional-btn" class="circle-btn">Regional</button>
+                        <button id="alchemy-btn" class="circle-btn">Alchemy</button>
+                    </div>
+                    <div class="alternatives-switch buydowns-switch">
+                        <label class="switch">
+                            <input id="alternatives-toggle" type="checkbox" />
+                            <span class="slider"></span>
+                        </label>
+                        <span style="margin-left:0.5rem; font-weight:600;">Alternatives</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="right-col">
+            <div id="circles"></div>
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('circles');
+
+            // End any cover pause so timer resumes on selection page
+            try {
+                var ps = sessionStorage.getItem('pauseStart');
+                if (!ps) ps = localStorage.getItem('pauseStart');
+                if (ps) {
+                    var delta = Date.now() - parseInt(ps,10);
+                    if (isFinite(delta) && delta > 0) {
+                        var prev = parseInt(sessionStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                        var prevL = parseInt(localStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                        var acc = Math.max(prev, prevL) || 0;
+                        acc = acc + delta;
+                        try { sessionStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                        try { localStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                    }
+                }
+                try { sessionStorage.removeItem('pauseStart'); } catch(e){}
+                try { localStorage.removeItem('pauseStart'); } catch(e){}
+            } catch(e) {}
+
+            // 1) Try to read position from URL query string: ?pos=...
+            const params = new URLSearchParams(window.location.search);
+            let selectedPosition = params.get('pos');
+
+            // 2) Fallback to localStorage if URL param missing
+            if (!selectedPosition) {
+                try { selectedPosition = localStorage.getItem('selectedPosition'); } catch (e) { selectedPosition = null; }
+            }
+
+            // Live run timer
+            (function(){
+                function readStart(){ try{ var s=sessionStorage.getItem('startTime'); if(s===null) s=localStorage.getItem('startTime'); return parseInt(s||'0',10)||0; }catch(e){return 0;} }
+                function readPause(){ try{ var p=sessionStorage.getItem('pauseAccumMs'); if(p===null) p=localStorage.getItem('pauseAccumMs'); return parseInt(p||'0',10)||0; }catch(e){return 0;} }
+                function fmt(ms){ return (ms/1000).toFixed(1) + ' s'; }
+                var el = null; var id = null;
+                function update(){ try { if (!el) el = document.getElementById('live-timer'); if(!el) return; var start = readStart(); if(!start){ el.textContent='0.0 s'; return; } var pause = readPause(); var ms = Date.now() - start - (pause||0); if(!isFinite(ms) || ms < 0) ms = 0; el.textContent = fmt(ms); } catch(e) {}}
+                document.addEventListener('DOMContentLoaded', function(){ update(); id = setInterval(update,200); });
+                window.addEventListener('beforeunload', function(){ if(id) clearInterval(id); });
+            })();
+
+            const noSpellBtn = document.getElementById('no-spell-btn');
+            const regionalBtn = document.getElementById('regional-btn');
+            const alchemyBtn = document.getElementById('alchemy-btn');
+
+            if (!selectedPosition) {
+                if (noSpellBtn) noSpellBtn.style.display = 'none';
+                if (regionalBtn) regionalBtn.style.display = 'none';
+                if (alchemyBtn) alchemyBtn.style.display = 'none';
+                const p = document.createElement('p'); p.className = 'notice'; p.textContent = 'No position selected'; container.appendChild(p); return;
+            }
+
+            // Expect format like "3-2". Extract the first number (circle index)
+            const firstPart = selectedPosition.split('-')[0];
+            const start = parseInt(firstPart, 10);
+
+            try { const topBuydowns = document.querySelector('.top-row .buydowns-switch'); if (topBuydowns && start === 1) topBuydowns.style.display = 'none'; } catch (e) {}
+
+            if (Number.isNaN(start) || start <= 0) { const p = document.createElement('p'); p.className = 'notice'; p.textContent = 'Invalid position value'; container.appendChild(p); return; }
+
+            function ordinalSuffix(n) { const rem100 = n % 100; if (rem100 >= 11 && rem100 <= 13) return 'th'; const rem10 = n % 10; if (rem10 === 1) return 'st'; if (rem10 === 2) return 'nd'; if (rem10 === 3) return 'rd'; return 'th'; }
+
+            const circleLabels = {
+                1: [ 'Cure Disease','Detect Magic','Disrupt Light','Fighter’s Intuition','Gentle Repose','Ghost Blade','Heartiness','Identify','Immunity to Poison','Implement','Light','Mentor','Pas','Protect Item','Protection from Boulder','Repair Armor','Speak','Speak with Dead','Strange Brew','Transmute Weapon','Zombie Walk' ],
+                2: [ 'Aura of Protection','Death Watch','Deep Pockets','Disenchant','Dream','Enchant Weapon','Group Healing','Guidance','Heal Limb','Protect the Soul','Protection from Missile','Reanimate Limb','Repair Item','Ward: Undead' ],
+                3: [ 'Animate Lesser Undead','Beckon Corpse','Cantrip','Commune with Spirit','Disease Weapon','Enfeeble Being','Feign Death','Foretell','Fortune Tell','Merge','Precognition','Purity','Raise Dead','Skew Divination','Soul Bane' ],
+                4: [ 'Animal Companion','Animate Undead','Armored Cloak','Call the Soul','Circle of Protection','Combat Raise Dead','Create Poison','Death Wish','Disrupt','Divine Aid','Enchant Armor','Find the Path','Magic Missile','Mystic Forge','Séance','Shapeshifting' ],
+                5: [ 'Animate Undead General','Armor-Piercing Weapon','Circle of Healing','Familiar','Reforge','Regenerate the Soul','Regeneration','Resist Magic','Vision','Ward: Enchanted Beings' ],
+                6: [ 'Assassin’s Blade','Cry of Life','Embrace Death','Intervention','Lightning Bolt','Masterwork Hammer','Prophecy','Resist Death','Ritual of Banishment','Second Chance','Seed of Life','Transformation' ]
+            };
+
+            for (let i = start; i >= 1; i--) {
+                const h = document.createElement('h2'); const suffix = ordinalSuffix(i); h.textContent = `${i}${suffix} circle`; container.appendChild(h);
+                const labels = circleLabels[i];
+                if (labels && labels.length) {
+                    const btnContainer = document.createElement('div'); btnContainer.className = 'circle-buttons';
+                    labels.forEach(label => { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'circle-btn'; btn.textContent = label; btnContainer.appendChild(btn); });
+                    container.appendChild(btnContainer);
+                }
+            }
+
+            try { const alchemyMap = {1:1,2:2,3:4,4:6,5:8,6:12}; if (alchemyBtn) { const val = alchemyMap[start] || ''; alchemyBtn.textContent = val ? `Alchemy (${val})` : 'Alchemy'; } } catch (e) {}
+
+            // Positions order used for recording search/keyboard usage
+            const positionsOrder = ['1-1','1-2','1-3','2-1','2-2','2-3','3-1','3-2','3-3','4-1','4-2','4-3','5-1','5-2','5-3','6-2'];
+
+            function setSearchUsedForPosition(pos, used) {
+                try {
+                    let raw = sessionStorage.getItem('searchUsed'); if (raw === null || raw === undefined) raw = localStorage.getItem('searchUsed');
+                    let arr = null; if (raw) { try { arr = JSON.parse(raw); } catch(e) { arr = null; } }
+                    if (!Array.isArray(arr) || arr.length !== positionsOrder.length) arr = new Array(positionsOrder.length).fill(false);
+                    const idx = positionsOrder.indexOf(pos);
+                    if (idx !== -1) { arr[idx] = !!used; try { sessionStorage.setItem('searchUsed', JSON.stringify(arr)); } catch(e) {} try { localStorage.setItem('searchUsed', JSON.stringify(arr)); } catch(e) {} }
+                } catch (e) {}
+            }
+
+            function setKeyboardUsedForPosition(pos, used) {
+                try {
+                    let raw = sessionStorage.getItem('keyboardUsed'); if (raw === null || raw === undefined) raw = localStorage.getItem('keyboardUsed');
+                    let arr = null; if (raw) { try { arr = JSON.parse(raw); } catch(e) { arr = null; } }
+                    if (!Array.isArray(arr) || arr.length !== positionsOrder.length) arr = new Array(positionsOrder.length).fill(false);
+                    const idx = positionsOrder.indexOf(pos);
+                    if (idx !== -1) { arr[idx] = !!arr[idx] || !!used; try { sessionStorage.setItem('keyboardUsed', JSON.stringify(arr)); } catch(e) {} try { localStorage.setItem('keyboardUsed', JSON.stringify(arr)); } catch(e) {} }
+                } catch (e) {}
+            }
+
+            const searchInput = document.getElementById('search-input');
+            if (searchInput) {
+                const applyFilter = () => {
+                    const q = (searchInput.value || '').trim().toLowerCase();
+                    const optionButtons = container.querySelectorAll('.circle-btn');
+                    const specialButtons = document.querySelectorAll('#special-buttons .circle-btn');
+                    function filterButton(b) { const text = (b.textContent || '').toLowerCase(); if (!q || text.includes(q)) b.style.display = ''; else b.style.display = 'none'; }
+                    optionButtons.forEach(filterButton); specialButtons.forEach(filterButton);
+                };
+                searchInput.addEventListener('input', applyFilter); applyFilter();
+
+                try {
+                    const buydownsToggle = document.getElementById('buydowns-toggle');
+                    function updateBuydownsView() {
+                        const showOnlyHighest = !buydownsToggle.checked; const headers = container.querySelectorAll('h2');
+                        headers.forEach((h, idx) => { const btns = h.nextElementSibling && h.nextElementSibling.classList && h.nextElementSibling.classList.contains('circle-buttons') ? h.nextElementSibling : null; if (idx === 0) { h.style.display = ''; if (btns) btns.style.display = ''; } else { if (showOnlyHighest) { h.style.display = 'none'; if (btns) btns.style.display = 'none'; } else { h.style.display = ''; if (btns) btns.style.display = ''; } } });
+                    }
+                    if (buydownsToggle) {
+                        try { const stored = localStorage.getItem('buydowns'); document.body.classList.add('no-switch-anim'); buydownsToggle.checked = stored === null ? false : (stored === 'true'); } catch (e) { buydownsToggle.checked = false; }
+                        requestAnimationFrame(() => document.body.classList.remove('no-switch-anim'));
+                        buydownsToggle.addEventListener('change', () => { try { localStorage.setItem('buydowns', String(buydownsToggle.checked)); } catch (e) {} updateBuydownsView(); });
+                        updateBuydownsView();
+                    }
+                } catch (e) {}
+
+                try {
+                    const alternativesToggle = document.getElementById('alternatives-toggle');
+                    const specialButtonsContainer = document.getElementById('special-buttons');
+                    function updateAlternativesView() { const show = !!(alternativesToggle && alternativesToggle.checked); if (specialButtonsContainer) { specialButtonsContainer.style.visibility = show ? '' : 'hidden'; specialButtonsContainer.style.pointerEvents = show ? '' : 'none'; specialButtonsContainer.setAttribute('aria-hidden', show ? 'false' : 'true'); } }
+                    if (alternativesToggle) {
+                        try { const storedAlt = localStorage.getItem('alternatives'); alternativesToggle.checked = storedAlt === null ? false : (storedAlt === 'true'); } catch (e) { alternativesToggle.checked = false; }
+                        alternativesToggle.addEventListener('change', () => { try { localStorage.setItem('alternatives', String(alternativesToggle.checked)); } catch (e) {} updateAlternativesView(); });
+                        updateAlternativesView();
+                    }
+                } catch (e) {}
+            }
+
+            // --- Keyboard navigation and interaction ---
+            (function() {
+                const searchInput = document.getElementById('search-input');
+                const noSpellBtn = document.getElementById('no-spell-btn');
+                const topBuydowns = document.querySelector('.top-row .buydowns-switch');
+                const buydownsToggle = document.getElementById('buydowns-toggle');
+                const regionalBtnEl = document.getElementById('regional-btn');
+                const alchemyBtnEl = document.getElementById('alchemy-btn');
+                const alternativesToggle = document.getElementById('alternatives-toggle');
+
+                let cur = {r:0,c:0}; let lastDir = null; let inRightList = false; let prevGridCur = {r:0,c:0}; let rightSelectedEl = null; let rememberedRightRow = null;
+                function mod3(n) { return ((n % 3) + 3) % 3; }
+
+                function normalizeCoord(prev, attempted, dir) {
+                    const r = mod3(attempted.r); const c = mod3(attempted.c);
+                    if (r === 0) return {r:0,c:0};
+                    if (r === 1) {
+                        if (c === 0) return {r:1,c:0};
+                        if (c === 1) { if (dir === 'vertical') return {r:1,c:0}; if (prev && prev.c === 0) { if (!topBuydowns || topBuydowns.style.display === 'none') return {r:1,c:0}; return {r:1,c:2}; } if (prev && prev.c === 2) return {r:1,c:0}; return {r:1,c:0}; }
+                        if (c === 2) { if (!topBuydowns || topBuydowns.style.display === 'none') return {r:1,c:0}; return {r:1,c:2}; }
+                    }
+                    if (r === 2) { const altOn = !!(alternativesToggle && alternativesToggle.checked); if (c === 2) return {r:2,c:2}; if (!altOn) return {r:2,c:2}; if (c === 0) return {r:2,c:0}; if (c === 1) return {r:2,c:1}; }
+                    return {r:0,c:0};
+                }
+
+                function elementForCoord(coord) {
+                    const {r,c} = coord; if (r === 0) return searchInput; if (r === 1) { if (c === 0) return noSpellBtn; if (c === 2) return topBuydowns || noSpellBtn; return noSpellBtn; } if (r === 2) { if (c === 2) return document.querySelector('.alternatives-switch'); if (c === 0) return regionalBtnEl; if (c === 1) return alchemyBtnEl; } return null;
+                }
+
+                function clearSelectionVisuals() { document.querySelectorAll('.kbd-selected').forEach(el => el.classList.remove('kbd-selected')); }
+                function applySelectionVisual(el) { if (!el) return; if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) { el.classList.add('kbd-selected'); } else if (el.tagName === 'INPUT') { el.classList.add('kbd-selected'); } else if (el.classList && el.classList.contains('circle-btn')) { el.classList.add('kbd-selected'); } }
+
+                function focusCoord(coord) {
+                    const el = elementForCoord(coord); if (!el) return; clearSelectionVisuals(); applySelectionVisual(el);
+                    try {
+                        const header = document.querySelector('.top-nav'); const headerH = header ? header.getBoundingClientRect().height : 0; const rect = el.getBoundingClientRect(); const padding = 8; const offset = Math.max(padding, headerH + padding); const elTop = rect.top; const elBottom = rect.bottom; const viewportH = window.innerHeight || document.documentElement.clientHeight; if (elTop < offset || elBottom > viewportH - padding) { const desiredTop = Math.max(0, window.scrollY + rect.top - offset); window.scrollTo({ top: desiredTop, left: 0, behavior: 'auto' }); }
+                    } catch (e) {}
+                    try { const prev = document.activeElement; if (prev && prev !== document.body && typeof prev.blur === 'function') prev.blur(); } catch (e) {}
+                    try { if (el.tagName === 'INPUT') el.focus(); else if (el.classList && el.classList.contains('circle-btn')) el.focus(); else if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) { const input = el.querySelector('input'); if (input) input.focus(); } } catch (e) {}
+                }
+
+                focusCoord(cur);
+
+                document.addEventListener('keydown', (ev) => {
+                    const arrows = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown']; if (!arrows.includes(ev.key)) return;
+                    try {
+                        const active = document.activeElement; if (active) { if (active === searchInput && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) { ev.preventDefault(); try { active.blur(); } catch (e) {} cur = {r:0,c:0}; } else if (active.closest && active.closest('.buydowns-switch') && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) { ev.preventDefault(); try { active.blur(); } catch (e) {} cur = {r:1,c:2}; } else if (active.closest && active.closest('.alternatives-switch') && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) { ev.preventDefault(); try { active.blur(); } catch (e) {} cur = {r:2,c:2}; } }
+                    } catch (e) {}
+
+                    if (inRightList) {
+                        ev.preventDefault();
+                        const allButtons = Array.from(container.querySelectorAll('.circle-btn')).filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none'); if (!allButtons.length) return;
+                        function buildRows(buttons) { const rows = []; const TOL = 8; buttons.forEach(b => { const r = b.getBoundingClientRect(); const top = Math.round(r.top); let found = false; for (const row of rows) { if (Math.abs(row.top - top) <= TOL) { row.items.push(b); row.top = Math.round((row.top + top) / 2); found = true; break; } } if (!found) rows.push({top: top, items: [b]}); }); rows.sort((a,b) => a.top - b.top); rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)); return rows; }
+                        const rows = buildRows(allButtons);
+                        function findRowIndex(el) { for (let i=0;i<rows.length;i++) if (rows[i].items.indexOf(el) !== -1) return i; return -1; }
+                        function nearestInRow(rowIdx, centerX) { const items = rows[rowIdx].items; if (!items || items.length === 0) return null; let best = items[0]; let bestDist = Math.abs((best.getBoundingClientRect().left + best.getBoundingClientRect().right)/2 - centerX); for (let j=1;j<items.length;j++) { const it = items[j]; const rect = it.getBoundingClientRect(); const cx = (rect.left + rect.right)/2; const d = Math.abs(cx - centerX); if (d < bestDist) { bestDist = d; best = it; } } return best; }
+                        function nearestGridRowByY(centerY) { const anchors = []; if (searchInput) anchors.push({el: searchInput, r:0}); if (noSpellBtn) anchors.push({el: noSpellBtn, r:1}); const specialContainer = document.getElementById('special-buttons'); if (specialContainer) anchors.push({el: specialContainer, r:2}); let bestR = 0; let bestD = Infinity; anchors.forEach(a => { const rect = a.el.getBoundingClientRect(); const cy = (rect.top + rect.bottom)/2; const d = Math.abs(cy - centerY); if (d < bestD) { bestD = d; bestR = a.r; } }); return bestR; }
+                        function findContainerIndexForEl(el) { const containers = Array.from(container.querySelectorAll('.circle-buttons')).filter(c => c.offsetParent !== null && getComputedStyle(c).display !== 'none'); for (let i=0;i<containers.length;i++) { if (containers[i].contains(el)) return {containers, idx:i}; } return {containers, idx:-1}; }
+
+                        const curEl = rightSelectedEl || allButtons[0]; const curRect = curEl.getBoundingClientRect(); const curCX = (curRect.left + curRect.right)/2; const curCY = (curRect.top + curRect.bottom)/2;
+
+                        if (ev.key === 'PageUp' || ev.key === 'PageDown') { const {containers, idx} = findContainerIndexForEl(curEl); if (!containers.length) return; const dir = ev.key === 'PageDown' ? 1 : -1; let nextIdx = idx === -1 ? 0 : (idx + dir + containers.length) % containers.length; const targetContainer = containers[nextIdx]; const buttons = Array.from(targetContainer.querySelectorAll('.circle-btn')).filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none'); if (!buttons.length) return; const pick = buttons[0]; clearSelectionVisuals(); rightSelectedEl = pick; applySelectionVisual(pick); try { pick.focus(); } catch (e) {} return; }
+
+                        let rowIdx = findRowIndex(curEl); if (rowIdx === -1) rowIdx = 0;
+
+                        if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+                            const items = rows[rowIdx].items; const idx = items.indexOf(curEl); const dir = ev.key === 'ArrowRight' ? 1 : -1; const newIdx = idx + dir; if (newIdx >= 0 && newIdx < items.length) { const newEl = items[newIdx]; clearSelectionVisuals(); rightSelectedEl = newEl; applySelectionVisual(newEl); try { newEl.focus(); } catch (e) {} return; }
+                            const firstVisibleRect = items[0].getBoundingClientRect(); const centerY = (firstVisibleRect.top + firstVisibleRect.bottom)/2; const targetGridRow = nearestGridRowByY(curCY);
+                            if (ev.key === 'ArrowRight') { rememberedRightRow = rowIdx >= 0 ? rowIdx : rememberedRightRow; inRightList = false; cur = {r: targetGridRow, c: 0}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (ev.key === 'ArrowLeft') { rememberedRightRow = rowIdx >= 0 ? rowIdx : rememberedRightRow; inRightList = false; cur = {r: targetGridRow, c: 2}; rightSelectedEl = null; focusCoord(cur); return; }
+                        }
+
+                        if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') { const dir = ev.key === 'ArrowDown' ? 1 : -1; const nextRow = (rowIdx + dir + rows.length) % rows.length; const pick = nearestInRow(nextRow, curCX) || rows[nextRow].items[0]; if (pick) { clearSelectionVisuals(); rightSelectedEl = pick; applySelectionVisual(pick); try { pick.focus(); } catch (e) {} } return; }
+                        return;
+                    }
+
+                    ev.preventDefault();
+                    let attempted = {r:cur.r, c:cur.c}; let dir = null;
+                    if (ev.key === 'ArrowUp') { attempted.r = mod3(cur.r - 1); dir = 'vertical'; }
+                    if (ev.key === 'ArrowDown') { attempted.r = mod3(cur.r + 1); dir = 'vertical'; }
+                    if (ev.key === 'ArrowLeft') { attempted.c = mod3(cur.c - 1); dir = 'horizontal'; }
+                    if (ev.key === 'ArrowRight') { attempted.c = mod3(cur.c + 1); dir = 'horizontal'; }
+
+                    let movingOffLeft = dir === 'horizontal' && ev.key === 'ArrowLeft' && cur.c === 0;
+                    let movingOffRight = dir === 'horizontal' && ev.key === 'ArrowRight' && cur.c === 2;
+                    if (dir === 'horizontal' && ev.key === 'ArrowRight' && cur.r === 0 && cur.c === 0) movingOffRight = true;
+                    if (dir === 'horizontal' && ev.key === 'ArrowRight' && cur.r === 1 && cur.c === 0) { if (!topBuydowns || topBuydowns.style.display === 'none') movingOffRight = true; }
+                    const altOn = !!(alternativesToggle && alternativesToggle.checked);
+                    if (dir === 'horizontal' && ev.key === 'ArrowLeft' && cur.r === 2 && cur.c === 2 && !altOn) movingOffLeft = true;
+                    if (movingOffLeft || movingOffRight) {
+                        const rightButtonsAll = Array.from(container.querySelectorAll('.circle-btn')).filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                        if (rightButtonsAll.length) {
+                            const TOL = 8; const rows = [];
+                            rightButtonsAll.forEach(b => { const r = b.getBoundingClientRect(); const top = Math.round(r.top); let found = false; for (const row of rows) { if (Math.abs(row.top - top) <= TOL) { row.items.push(b); row.top = Math.round((row.top + top)/2); found = true; break; } } if (!found) rows.push({top: top, items: [b]}); });
+                            rows.sort((a,b) => a.top - b.top); rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left));
+                            let targetRowIdx = 0;
+                            if (rememberedRightRow !== null && rememberedRightRow >= 0 && rememberedRightRow < rows.length) { targetRowIdx = rememberedRightRow; } else {
+                                const centerY = (() => { const anchors = []; if (searchInput) anchors.push(searchInput.getBoundingClientRect()); if (noSpellBtn) anchors.push(noSpellBtn.getBoundingClientRect()); const specialContainer = document.getElementById('special-buttons'); if (specialContainer) anchors.push(specialContainer.getBoundingClientRect()); if (!anchors.length) return rows[0].items[0].getBoundingClientRect().top; const idx = Math.min(Math.max(cur.r,0), anchors.length-1); const rect = anchors[idx]; return (rect.top + rect.bottom)/2; })();
+                                let bestD = Infinity; for (let i=0;i<rows.length;i++) { const r = rows[i]; const rect = r.items[0].getBoundingClientRect(); const cy = (rect.top + rect.bottom)/2; const d = Math.abs(cy - centerY); if (d < bestD) { bestD = d; targetRowIdx = i; } }
+                            }
+                            const targetItems = rows[targetRowIdx].items; let pick = null; if (movingOffRight) pick = targetItems[0]; else if (movingOffLeft) pick = targetItems[targetItems.length-1]; if (!pick) pick = rightButtonsAll[0]; prevGridCur = {r: cur.r, c: cur.c}; inRightList = true; rightSelectedEl = pick; clearSelectionVisuals(); applySelectionVisual(pick); try { pick.focus(); } catch (e) {} return;
+                        }
+                    }
+
+                    const final = normalizeCoord(cur, attempted, dir); lastDir = dir; cur = final; focusCoord(cur);
+                });
+
+                (function setupHoverToSelect() {
+                    let lastHovered = null;
+                    document.addEventListener('mousemove', (ev) => {
+                        try {
+                            const active = document.activeElement; const tag = (active && active.tagName) || '';
+                            if (tag === 'TEXTAREA' || tag === 'SELECT') return; if (tag === 'INPUT' && active !== searchInput) return;
+                            const hovered = ev.target.closest('.circle-btn, .buydowns-switch, .alternatives-switch, #search-input, #no-spell-btn, #regional-btn, #alchemy-btn');
+                            if (!hovered) { lastHovered = null; return; }
+                            if (hovered === lastHovered) return; lastHovered = hovered;
+                            if (hovered.id === 'alchemy-points') return;
+                            if (hovered.classList && (hovered.classList.contains('alternatives-switch') || hovered.classList.contains('buydowns-switch'))) { inRightList = false; if (hovered.classList.contains('alternatives-switch')) cur = {r:2, c:2}; else cur = {r:1, c:2}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (hovered.id === 'search-input') { inRightList = false; cur = {r:0,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (hovered.id === 'no-spell-btn') { inRightList = false; cur = {r:1,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (hovered.id === 'regional-btn') { inRightList = false; cur = {r:2,c:0}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (hovered.id === 'alchemy-btn') { inRightList = false; cur = {r:2,c:1}; rightSelectedEl = null; focusCoord(cur); return; }
+                            if (hovered.classList && hovered.classList.contains('circle-btn')) {
+                                inRightList = true; rightSelectedEl = hovered;
+                                const allButtons = Array.from(container.querySelectorAll('.circle-btn')).filter(b => b.offsetParent !== null && getComputedStyle(b).display !== 'none');
+                                const rows = []; const TOL = 8; allButtons.forEach(b => { const r = b.getBoundingClientRect(); const top = Math.round(r.top); let found = false; for (const row of rows) { if (Math.abs(row.top - top) <= TOL) { row.items.push(b); row.top = Math.round((row.top + top)/2); found = true; break; } } if (!found) rows.push({top: top, items: [b]}); }); rows.sort((a,b) => a.top - b.top); rows.forEach(r => r.items.sort((a,b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)); for (let i=0;i<rows.length;i++) { if (rows[i].items.indexOf(hovered) !== -1) { rememberedRightRow = i; break; } }
+                                clearSelectionVisuals(); applySelectionVisual(hovered); try { hovered.focus(); } catch (e) {}
+                            }
+                        } catch (e) {}
+                    }, { passive: true });
+                })();
+
+                // Activation via Enter/Space
+                document.addEventListener('keydown', (ev) => {
+                    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                    try { const active = document.activeElement; if (ev.key === ' ' && active && active === searchInput) return; } catch (e) {}
+                    ev.preventDefault();
+                    let el = null; if (inRightList && rightSelectedEl) el = rightSelectedEl; else el = elementForCoord(cur) || rightSelectedEl || document.querySelector('.circle-btn.kbd-selected') || (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('circle-btn') ? document.activeElement : null);
+                    if (!el) return;
+                    if (el.classList && (el.classList.contains('buydowns-switch') || el.classList.contains('alternatives-switch'))) { const input = el.querySelector('input'); if (input) { input.checked = !input.checked; input.dispatchEvent(new Event('change', {bubbles:true})); } return; }
+                    if (el.tagName === 'INPUT') { el.focus(); return; }
+                    if (el.classList && el.classList.contains('circle-btn')) { try { sessionStorage.setItem('lastActivationWasKeyboard', '1'); } catch(e) {} try { el.click(); } catch (e) {} return; }
+                });
+
+                // Escape key: return to B spelllist
+                document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' || ev.key === 'Esc') { ev.preventDefault(); window.location.href = 'spelllistB.html'; } });
+            })();
+
+            // When a circle button is clicked, navigate back to spelllistB.html and pass the selection
+            container.addEventListener('click', (ev) => {
+                const btn = ev.target.closest('.circle-btn'); if (!btn) return;
+                const label = btn.textContent || btn.innerText; const pos = selectedPosition; if (!pos) return;
+                try {
+                    const q = (searchInput && (searchInput.value || '').trim()) || '';
+                    setSearchUsedForPosition(pos, q.length > 0);
+                    var kflag = null; try { kflag = sessionStorage.getItem('lastActivationWasKeyboard'); if (kflag === null) kflag = localStorage.getItem('lastActivationWasKeyboard'); } catch(e) { kflag = null; }
+                    setKeyboardUsedForPosition(pos, kflag === '1'); try { sessionStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {} try { localStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {}
+                    const raw = localStorage.getItem('spells'); const map = raw ? JSON.parse(raw) : {}; map[pos] = label; localStorage.setItem('spells', JSON.stringify(map)); localStorage.setItem('selectedPosition', pos);
+                } catch (e) {}
+                const goto = `spelllistB.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                window.location.href = goto;
+            });
+
+            if (noSpellBtn) {
+                noSpellBtn.addEventListener('click', () => {
+                    const pos = selectedPosition; if (!pos) return;
+                    try {
+                        const q = (searchInput && (searchInput.value || '').trim()) || '';
+                        setSearchUsedForPosition(pos, q.length > 0);
+                        var kflag = null; try { kflag = sessionStorage.getItem('lastActivationWasKeyboard'); if (kflag === null) kflag = localStorage.getItem('lastActivationWasKeyboard'); } catch(e) { kflag = null; }
+                        setKeyboardUsedForPosition(pos, kflag === '1'); try { sessionStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {} try { localStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {}
+                        const raw = localStorage.getItem('spells'); const map = raw ? JSON.parse(raw) : {}; if (map.hasOwnProperty(pos)) { delete map[pos]; localStorage.setItem('spells', JSON.stringify(map)); }
+                        localStorage.removeItem('selectedPosition');
+                    } catch (e) {}
+                    window.location.href = `spelllistB.html?clearedPos=${encodeURIComponent(pos)}`;
+                });
+            }
+
+            function makeSpecialBtnHandler(btn) {
+                if (!btn) return;
+                btn.addEventListener('click', () => {
+                    const pos = selectedPosition; if (!pos) return; const label = (btn.textContent || btn.innerText || '').trim();
+                    try {
+                        const q = (searchInput && (searchInput.value || '').trim()) || '';
+                        setSearchUsedForPosition(pos, q.length > 0);
+                        var kflag = null; try { kflag = sessionStorage.getItem('lastActivationWasKeyboard'); if (kflag === null) kflag = localStorage.getItem('lastActivationWasKeyboard'); } catch(e) { kflag = null; }
+                        setKeyboardUsedForPosition(pos, kflag === '1'); try { sessionStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {} try { localStorage.removeItem('lastActivationWasKeyboard'); } catch(e) {}
+                        const raw = localStorage.getItem('spells'); const map = raw ? JSON.parse(raw) : {}; map[pos] = label; localStorage.setItem('spells', JSON.stringify(map)); localStorage.setItem('selectedPosition', pos);
+                    } catch (e) {}
+                    const goto = `spelllistB.html?pos=${encodeURIComponent(pos)}&spell=${encodeURIComponent(label)}`;
+                    window.location.href = goto;
+                });
+            }
+
+            makeSpecialBtnHandler(regionalBtn);
+            makeSpecialBtnHandler(alchemyBtn);
+        });
+    </script>
+</body>
+</html>

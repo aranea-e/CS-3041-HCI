@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Realms Spellbook B</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        /* Prevent flash of wrong styling until JS applies selection */
+        .js-initial-hide { visibility: hidden; }
+        .spell { }
+        .spell.selected { }
+        .spell-slot.first-empty {
+            z-index: 2;
+            color: #444444;
+        }
+        .spell-slot.kbd-selected {
+            z-index: 2;
+            transition: color 120ms ease;
+            color: var(--highlight-color);
+            box-shadow: none;
+            outline: none;
+        }
+        .spell-slot.first-empty.kbd-selected {
+            color: var(--highlight-color);
+        }
+        .spell-slot.selected[data-position^="1-"],
+        .spell-slot.kbd-selected[data-position^="1-"],
+        .spell-slot.selected[data-position^="3-"],
+        .spell-slot.kbd-selected[data-position^="3-"],
+        .spell-slot.selected[data-position^="5-"],
+        .spell-slot.kbd-selected[data-position^="5-"] {
+            background-color: white;
+        }
+        .spell-slot.selected[data-position^="2-"],
+        .spell-slot.kbd-selected[data-position^="2-"],
+        .spell-slot.selected[data-position^="4-"],
+        .spell-slot.kbd-selected[data-position^="4-"],
+        .spell-slot.selected[data-position^="6-"],
+        .spell-slot.kbd-selected[data-position^="6-"],
+        .spell-slot.selected.clear-btn,
+        .spell-slot.kbd-selected.clear-btn {
+            background-color: #f0f0f0;
+        }
+        .spell-slot.col-disabled,
+        .spell-slot.row-disabled {
+            position: relative;
+            pointer-events: none;
+            color: transparent !important;
+        }
+        .spell-slot.col-disabled::after,
+        .spell-slot.row-disabled::after {
+            content: '✕';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            color: #a00;
+            user-select: none;
+        }
+        .spell-slot.selected:focus,
+        .spell-slot.kbd-selected:focus {
+            outline: none;
+            box-shadow: none;
+        }
+    </style>
+
+    <script>
+        (function() {
+            var storageKey = 'selectedSpells';
+            function applySelection() {
+                try {
+                    var raw = localStorage.getItem(storageKey);
+                    if (!raw) return;
+                    var selected = JSON.parse(raw);
+                    if (!Array.isArray(selected)) return;
+                    var selSet = {};
+                    for (var i = 0; i < selected.length; i++) selSet[String(selected[i])] = true;
+                    var nodes = document.querySelectorAll('[data-spell-id]');
+                    for (var j = 0; j < nodes.length; j++) {
+                        var el = nodes[j];
+                        var id = el.getAttribute('data-spell-id');
+                        if (id && selSet[id]) el.classList.add('selected');
+                        else el.classList.remove('selected');
+                    }
+                } catch (e) {
+                    console.error('applySelection error', e);
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    applySelection();
+                    document.body.classList.remove('js-initial-hide');
+                }, { once: true });
+            } else {
+                applySelection();
+                document.body.classList.remove('js-initial-hide');
+            }
+        })();
+    </script>
+
+    <script>
+            (function(){
+                try {
+                    var params = new URLSearchParams(window.location.search);
+                    var flag = false;
+                    try { if (params.get('clearAll')) flag = true; } catch(e){}
+                    try { if (!flag && sessionStorage.getItem('clearAllPending')) flag = true; } catch(e){}
+                    try { if (!flag && localStorage.getItem('clearAllPending')) flag = true; } catch(e){}
+                    if (flag) {
+                        try { localStorage.removeItem('spells'); } catch(e){}
+                        try { localStorage.removeItem('spellOptions'); } catch(e){}
+                        try { sessionStorage.removeItem('spells'); } catch(e){}
+                        try { sessionStorage.removeItem('spellOptions'); } catch(e){}
+                        try { sessionStorage.removeItem('clearAllPending'); } catch(e){}
+                        try { localStorage.removeItem('clearAllPending'); } catch(e){}
+                        try { history.replaceState(null, '', window.location.pathname + window.location.hash); } catch(e){}
+                    }
+                } catch (e) {
+                }
+            })();
+            (function(){
+                function getCoverPath(){
+                    try{ var v = sessionStorage.getItem('cover_path'); if (v !== null) return v; }catch(e){}
+                    try{ var w = localStorage.getItem('cover_path'); if (w !== null) return w; }catch(e){}
+                    return null;
+                }
+
+                document.addEventListener('DOMContentLoaded', function(){
+                    try {
+                        var ps = sessionStorage.getItem('pauseStart');
+                        if (!ps) ps = localStorage.getItem('pauseStart');
+                        if (ps) {
+                            var delta = Date.now() - parseInt(ps,10);
+                            if (isFinite(delta) && delta > 0) {
+                                var prev = parseInt(sessionStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                                var prevL = parseInt(localStorage.getItem('pauseAccumMs') || '0',10) || 0;
+                                var acc = Math.max(prev, prevL) || 0;
+                                acc = acc + delta;
+                                try { sessionStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                                try { localStorage.setItem('pauseAccumMs', String(acc)); } catch(e){}
+                            }
+                        }
+                        try { sessionStorage.removeItem('pauseStart'); } catch(e){}
+                        try { localStorage.removeItem('pauseStart'); } catch(e){}
+                    } catch(e) {}
+                    try{
+                        var p = getCoverPath();
+                        (function(){
+                            function readStart(){ try{ var s=sessionStorage.getItem('startTime'); if(s===null) s=localStorage.getItem('startTime'); return parseInt(s||'0',10)||0; }catch(e){return 0;} }
+                            function readPause(){ try{ var p=sessionStorage.getItem('pauseAccumMs'); if(p===null) p=localStorage.getItem('pauseAccumMs'); return parseInt(p||'0',10)||0; }catch(e){return 0;} }
+                            function fmt(ms){ return (ms/1000).toFixed(1) + ' s'; }
+                            var el = null;
+                            var id = null;
+                            function update(){
+                                try {
+                                    if (!el) el = document.getElementById('live-timer');
+                                    if(!el) return;
+                                    var start = readStart();
+                                    if(!start){ el.textContent = '0.0 s'; return; }
+                                    var pause = readPause();
+                                    var ms = Date.now() - start - (pause||0);
+                                    if(!isFinite(ms) || ms < 0) ms = 0;
+                                    el.textContent = fmt(ms);
+                                } catch(e) {}
+                            }
+                            try { update(); id = setInterval(update, 200); } catch(e) {}
+                            window.addEventListener('beforeunload', function(){ if(id) clearInterval(id); });
+                        })();
+                        var disabledCols = [];
+                        var armor = (function(){ try{ var v = sessionStorage.getItem('cover_armor'); if (v !== null) return v; }catch(e){} try{ var w = localStorage.getItem('cover_armor'); if (w !== null) return w; }catch(e){} return '0'; })();
+                        var bottomDisabled = false;
+                        if (!p || p === '1') {
+                            disabledCols = [2,3];
+                            bottomDisabled = false;
+                        } else if (p === '2') {
+                            disabledCols = [3];
+                            if (armor === '1') bottomDisabled = true;
+                        } else {
+                            disabledCols = [];
+                            if (armor === '1' && p !== '1') bottomDisabled = true;
+                        }
+
+                        Array.from(document.querySelectorAll('.spell-slot:not([data-replica])')).forEach(function(el){
+                            try{
+                                if (!el || !el.dataset || !el.dataset.position) return;
+                                if (el.classList.contains('clear-btn') || el.classList.contains('alchemy-label')) return;
+                                var parts = String(el.dataset.position).split('-').map(function(x){ return parseInt(x,10); });
+                                if (parts.length < 2) return;
+                                var col = parts[1];
+                                var row = parts[0];
+                                if (disabledCols.indexOf(col) !== -1) {
+                                    el.classList.add('col-disabled');
+                                    try { el.classList.remove('selected'); }catch(e){}
+                                    try { el.classList.remove('first-empty'); }catch(e){}
+                                    try { el.classList.remove('kbd-selected'); }catch(e){}
+                                    try { el.textContent = ''; }catch(e){}
+                                    try { el.setAttribute('aria-disabled','true'); }catch(e){}
+                                    try { el.tabIndex = -1; }catch(e){}
+                                }
+                                if (bottomDisabled) {
+                                    if ((col === 2 && row === 6) || (col !== 2 && row === 5)) {
+                                        el.classList.add('row-disabled');
+                                        try { el.classList.remove('selected'); }catch(e){}
+                                        try { el.classList.remove('first-empty'); }catch(e){}
+                                        try { el.classList.remove('kbd-selected'); }catch(e){}
+                                        try { el.textContent = ''; }catch(e){}
+                                        try { el.setAttribute('aria-disabled','true'); }catch(e){}
+                                        try { el.tabIndex = -1; }catch(e){}
+                                    }
+                                }
+                            }catch(e){}
+                        });
+                    }catch(e){}
+                }, { once: true });
+            })();
+        </script>
+</head>
+
+<body class="js-initial-hide">
+    <nav class="top-nav">
+        <a class="nav-btn" href="coverB.html">Spellcaster Info</a>
+        <a class="nav-btn" href="spelllistB.html">Spell List</a>
+        <a class="nav-btn" href="index.html" style="margin-left:auto;">Restart</a>
+    </nav>
+    <div id="live-timer" style="position:fixed; right:12px; top:64px; background:#111; color:#fff; padding:6px 8px; border-radius:6px; font-size:0.9rem; z-index:10001;">0.0 s</div>
+
+    <div class="page-layout">
+        <div class="main-col">
+            <div class="spell-grid">
+        <button class="spell-slot" data-position="1-1">Select Spell</button>
+        <button class="spell-slot" data-position="1-2">Select Spell</button>
+        <button class="spell-slot" data-position="1-3">Select Spell</button>
+        <button class="spell-slot" data-position="2-1">Select Spell</button>
+        <button class="spell-slot" data-position="2-2">Select Spell</button>
+        <button class="spell-slot" data-position="2-3">Select Spell</button>
+        <button class="spell-slot" data-position="3-1">Select Spell</button>
+        <button class="spell-slot" data-position="3-2">Select Spell</button>
+        <button class="spell-slot" data-position="3-3">Select Spell</button>
+        <button class="spell-slot" data-position="4-1">Select Spell</button>
+        <button class="spell-slot" data-position="4-2">Select Spell</button>
+        <button class="spell-slot" data-position="4-3">Select Spell</button>
+        <button class="spell-slot" data-position="5-1">Select Spell</button>
+        <button class="spell-slot" data-position="5-2">Select Spell</button>
+        <button class="spell-slot" data-position="5-3">Select Spell</button>
+        <button class="spell-slot middle-extra" data-position="6-2">Select Spell</button>
+        <textarea id="spell-options" class="options-box" placeholder="Spell Options"></textarea>
+    <div id="alchemy-points" class="spell-slot alchemy-label" data-position="7-3">Alchemy Points: 0</div>
+    <button class="spell-slot clear-btn" data-position="8-3">Clear</button>
+        </div>
+        </div>
+
+        <aside class="small-build">
+            <h3 style="margin-top:0;margin-bottom:0.5rem;">Target Build:</h3>
+            <div class="small-replica" id="small-replica" aria-hidden="true" style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem;">
+                <div class="spell-slot" data-replica="true" data-position="1-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="1-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="1-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="2-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="2-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="2-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="3-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="3-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="3-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="4-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="4-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="4-3">—</div>
+
+                <div class="spell-slot" data-replica="true" data-position="5-1">—</div>
+                <div class="spell-slot" data-replica="true" data-position="5-2">—</div>
+                <div class="spell-slot" data-replica="true" data-position="5-3">—</div>
+
+                <div></div>
+                <div class="spell-slot middle-extra" data-replica="true" data-position="6-2">—</div>
+                <div></div>
+            </div>
+            <div style="margin-top:0.6rem;font-size:0.85rem;color:#666;">Replicate this build.<br><br>Click on a spell in the grid to edit.<br><br>You may also navigate with the arrow keys and enter.</div>
+        </aside>
+    </div>
+
+    <script src="../js/main.js"></script>
+
+    <script>
+        (function(){
+            function readSpellsMap(){
+                try{
+                    var t = localStorage.getItem('targetSpells');
+                    if (t) return JSON.parse(t);
+                } catch(e){}
+                try{
+                    var s = sessionStorage.getItem('targetSpells');
+                    if (s) return JSON.parse(s);
+                } catch(e){}
+                return {};
+            }
+
+            document.addEventListener('DOMContentLoaded', function(){
+                var rawLocal = null;
+                try{ rawLocal = localStorage.getItem('spells'); } catch(e){}
+                var rawSession = null;
+                try{ rawSession = sessionStorage.getItem('spells'); } catch(e){}
+
+                console.debug('small-replica: localStorage.spells=', rawLocal, ' sessionStorage.spells=', rawSession);
+
+                var map = readSpellsMap() || {};
+                var slots = document.querySelectorAll('#small-replica .spell-slot');
+                if(!slots || slots.length===0) return;
+                function normalizeLabel(lbl){
+                    if (!lbl) return '';
+                    var t = String(lbl).trim();
+                    if (t === '—' || t.toLowerCase() === 'select spell' || t === '') return '';
+                    return t;
+                }
+
+                slots.forEach(function(s){
+                    var pos = s.dataset.position;
+                    if(!pos) return;
+
+                    var targetLabel = null;
+                    try {
+                        if (map && Object.prototype.hasOwnProperty.call(map, pos)) targetLabel = String(map[pos]);
+                    } catch (e) { targetLabel = null; }
+
+                    if (targetLabel !== null) {
+                        if (String(targetLabel).trim() === '') {
+                            s.textContent = '';
+                            s.classList.remove('selected');
+                            s.classList.remove('mismatch');
+                            s.classList.add('replica-disabled');
+                        } else {
+                            s.classList.remove('replica-disabled');
+                            s.textContent = targetLabel;
+                            s.classList.add('selected');
+                        }
+                    } else {
+                        s.textContent = '—';
+                        s.classList.remove('selected');
+                        s.classList.remove('mismatch');
+                        s.classList.add('replica-disabled');
+                    }
+
+                    try {
+                        var interactive = document.querySelector(`.spell-slot[data-position="${pos}"]:not([data-replica])`);
+                        var interactiveDisabled = false;
+                        try {
+                            if (interactive && interactive.classList && (interactive.classList.contains('col-disabled') || interactive.classList.contains('row-disabled'))) {
+                                interactiveDisabled = true;
+                            }
+                        } catch (e) {}
+
+                        if (interactiveDisabled) interactive = null;
+                        var interactiveLabel = interactive ? String(interactive.textContent).trim() : null;
+
+                        var normTarget = normalizeLabel(targetLabel);
+                        var normInteractive = normalizeLabel(interactiveLabel);
+
+                        if (normTarget === '' && normInteractive === '') {
+                            if (interactiveDisabled) {
+                                s.classList.remove('mismatch');
+                            } else {
+                                s.classList.add('mismatch');
+                            }
+                        } else if (normTarget === normInteractive) {
+                            s.classList.remove('mismatch');
+                        } else {
+                            s.classList.add('mismatch');
+                        }
+                    } catch (e) {
+                        s.classList.remove('mismatch');
+                    }
+                });
+
+                try {
+                    var hasTarget = false;
+                    Object.keys(map || {}).forEach(function(p){
+                        if (normalizeLabel(map[p]) !== '') hasTarget = true;
+                    });
+
+                    var mismatches = document.querySelectorAll('#small-replica .spell-slot.mismatch');
+                    if (hasTarget && (!mismatches || mismatches.length === 0)) {
+                        try {
+                            var startS = parseInt(sessionStorage.getItem('startTime') || '0', 10) || 0;
+                            var startL = parseInt(localStorage.getItem('startTime') || '0', 10) || 0;
+                            var start = startS || startL || 0;
+
+                            var countS = parseInt(sessionStorage.getItem('selectionCount') || '0', 10) || 0;
+                            var countL = parseInt(localStorage.getItem('selectionCount') || '0', 10) || 0;
+                            var count = Math.max(countS, countL) || 0;
+
+                            var totalMs = 0;
+                            var pauseS = parseInt(sessionStorage.getItem('pauseAccumMs') || '0', 10) || 0;
+                            var pauseL = parseInt(localStorage.getItem('pauseAccumMs') || '0', 10) || 0;
+                            var pauseAccum = Math.max(pauseS, pauseL) || 0;
+                            if (start > 0) totalMs = Date.now() - start - pauseAccum;
+                            if (!isFinite(totalMs) || totalMs < 0) totalMs = 0;
+                            var avgMs = 0;
+                            if (count > 0) avgMs = Math.round(totalMs / count);
+                            else avgMs = totalMs || 0;
+                            try { localStorage.setItem('avgSelectionTimeMs', String(avgMs)); } catch(e){}
+                            try { sessionStorage.setItem('avgSelectionTimeMs', String(avgMs)); } catch(e){}
+                        } catch (e) {}
+                        try {
+                            try { localStorage.setItem('totalRunMs', String(totalMs)); } catch(e) {}
+                            try { sessionStorage.setItem('totalRunMs', String(totalMs)); } catch(e) {}
+                            try { localStorage.removeItem('startTime'); } catch(e) {}
+                            try { sessionStorage.removeItem('startTime'); } catch(e) {}
+                        } catch(e) {}
+                        setTimeout(function(){ window.location.href = 'survey.html'; }, 60);
+                    }
+                } catch (e) {
+                }
+            }, {once:true});
+        })();
+    </script>
+</body>
+</html>
