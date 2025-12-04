@@ -6,20 +6,24 @@
   <title>Spellbook Creator Task</title>
   <link rel="stylesheet" href="../css/styles.css" />
   <style>
-    /* Reduce top margin so content fits without vertical scrolling */
-    .hf-container{max-width:760px;margin:1.25rem auto;padding:1rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
-    .hf-cta{display:inline-block;margin-top:0.5rem}
-    .hf-cta button{padding:0.6rem 1rem;font-size:1rem}
+    /* Tightened layout so index content fits without vertical scroll */
+    .hf-container{max-width:760px;margin:0.9rem auto;padding:0.6rem;font-family:system-ui,Segoe UI,Roboto,Arial,Helvetica,sans-serif}
+    .hf-cta{display:inline-block;margin-top:0.45rem}
+    .hf-cta button{padding:0.45rem 0.85rem;font-size:0.95rem}
     /* Replica grid visuals - non-interactable */
-    .replica-grid .spell-slot{border:1px solid #ddd;padding:0.5rem;border-radius:6px;background:#fff;text-align:center;font-size:0.95rem}
+    .replica-grid .spell-slot{border:1px solid #ddd;padding:0.45rem;border-radius:6px;background:#fff;text-align:center;font-size:0.9rem}
     .replica-grid .spell-slot.selected{background:#f6f6f6}
     /* ensure replica does not receive pointer events or text selection */
     .replica-grid .spell-slot{pointer-events:none;user-select:none}
+    /* layout tweaks: narrower right column and smaller gaps */
+    .index-columns{display:grid; grid-template-columns:1fr 320px; gap:0.5rem; align-items:start}
+    h1{margin-top:0;margin-bottom:0.5rem}
+    h2{margin-top:0;margin-bottom:0.25rem}
   </style>
 </head>
 <body>
   <main class="hf-container">
-    <div class="index-columns" style="display:grid; grid-template-columns:1fr 360px; gap:0.75rem; align-items:start;">
+    <div class="index-columns">
       <section class="left-col">
         <h1>Spellbook Creator Task</h1>
 

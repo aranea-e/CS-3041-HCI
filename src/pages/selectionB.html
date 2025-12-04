@@ -211,11 +211,21 @@
 
             const searchInput = document.getElementById('search-input');
             if (searchInput) {
+                // Helper: normalize and strip diacritics so searches ignore accents
+                function stripDiacritics(s) {
+                    if (!s) return '';
+                    try {
+                        if (typeof s.normalize === 'function') return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    } catch (e) {}
+                    return (s || '').replace(/[\u0300-\u036f]/g, '');
+                }
+
                 const applyFilter = () => {
-                    const q = (searchInput.value || '').trim().toLowerCase();
+                    const rawQ = (searchInput.value || '').trim();
+                    const q = stripDiacritics(rawQ).toLowerCase();
                     const optionButtons = container.querySelectorAll('.circle-btn');
                     const specialButtons = document.querySelectorAll('#special-buttons .circle-btn');
-                    function filterButton(b) { const text = (b.textContent || '').toLowerCase(); if (!q || text.includes(q)) b.style.display = ''; else b.style.display = 'none'; }
+                    function filterButton(b) { const text = stripDiacritics(b.textContent || '').toLowerCase(); if (!q || text.includes(q)) b.style.display = ''; else b.style.display = 'none'; }
                     optionButtons.forEach(filterButton); specialButtons.forEach(filterButton);
                 };
                 searchInput.addEventListener('input', applyFilter); applyFilter();

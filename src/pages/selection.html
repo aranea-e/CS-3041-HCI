@@ -450,15 +450,29 @@
                 }
             }
             if (searchInput) {
+                // Helper: normalize text and strip diacritics so searches ignore accents
+                function stripDiacritics(s) {
+                    if (!s) return '';
+                    try {
+                        if (typeof s.normalize === 'function') {
+                            return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        }
+                    } catch (e) {
+                        // fallthrough to basic replace
+                    }
+                    return (s || '').replace(/[\u0300-\u036f]/g, '');
+                }
+
                 const applyFilter = () => {
-                    const q = (searchInput.value || '').trim().toLowerCase();
+                    const rawQ = (searchInput.value || '').trim();
+                    const q = stripDiacritics(rawQ).toLowerCase();
                     const optionButtons = container.querySelectorAll('.circle-btn');
                     // Also include the special buttons (Regional/Alchemy) which live
                     // outside the circles container so they can be filtered too.
                     const specialButtons = document.querySelectorAll('#special-buttons .circle-btn');
 
                     function filterButton(b) {
-                        const text = (b.textContent || '').toLowerCase();
+                        const text = stripDiacritics(b.textContent || '').toLowerCase();
                         if (!q || text.includes(q)) {
                             b.style.display = '';
                         } else {
